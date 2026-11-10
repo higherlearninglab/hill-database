@@ -1,0 +1,147 @@
+PASS A0 36 questions loaded
+PASS T1 proposed evaluations match workbook
+PASS T1 verdict Supported
+PASS T1 severity No concerns
+PASS T1 context flag
+PASS T1 proposed type
+PASS T1 override note demanded only where the workbook demands it
+PASS T2 proposed evaluations match workbook
+PASS T2 verdict Overstated
+PASS T2 severity Major concerns
+PASS T2 context flag
+PASS T2 proposed type
+PASS T2 override note demanded only where the workbook demands it
+PASS T3 proposed evaluations match workbook
+PASS T3 verdict Not supported
+PASS T3 severity Major concerns
+PASS T3 context flag
+PASS T3 proposed type
+PASS T3 override note demanded only where the workbook demands it
+PASS T4 proposed evaluations match workbook
+PASS T4 verdict Overstated
+PASS T4 severity Minor concerns
+PASS T4 context flag
+PASS T4 proposed type
+PASS T4 override note demanded only where the workbook demands it
+PASS T5 proposed evaluations match workbook
+PASS T5 verdict Partially supported
+PASS T5 severity Minor concerns
+PASS T5 context flag
+PASS T5 proposed type
+PASS T5 override note demanded only where the workbook demands it
+PASS T6 proposed evaluations match workbook
+PASS T6 verdict Supported
+PASS T6 severity No concerns
+PASS T6 context flag
+PASS T6 proposed type
+PASS T6 override note demanded only where the workbook demands it
+PASS T7 proposed evaluations match workbook
+PASS T7 verdict Partially supported
+PASS T7 severity Minor concerns
+PASS T7 context flag
+PASS T7 proposed type
+PASS T7 override note demanded only where the workbook demands it
+PASS T8 proposed evaluations match workbook
+PASS T8 verdict Not supported
+PASS T8 severity Major concerns
+PASS T8 context flag
+PASS T8 proposed type
+PASS T8 override note demanded only where the workbook demands it
+PASS T9 proposed evaluations match workbook
+PASS T9 verdict Overstated
+PASS T9 severity Major concerns
+PASS T9 context flag
+PASS T9 proposed type
+PASS T9 override note demanded only where the workbook demands it
+PASS T10 proposed evaluations match workbook
+PASS T10 verdict Partially supported
+PASS T10 severity Minor concerns
+PASS T10 context flag
+PASS T10 proposed type
+PASS T10 override note demanded only where the workbook demands it
+PASS T11 proposed evaluations match workbook
+PASS T11 verdict Overstated
+PASS T11 severity Major concerns
+PASS T11 context flag
+PASS T11 proposed type
+PASS T11 override note demanded only where the workbook demands it
+PASS T12 proposed evaluations match workbook
+PASS T12 verdict Partially supported
+PASS T12 severity Minor concerns
+PASS T12 context flag
+PASS T12 proposed type
+PASS T12 override note demanded only where the workbook demands it
+PASS T13 proposed evaluations match workbook
+PASS T13 verdict Overstated
+PASS T13 severity Minor concerns
+PASS T13 context flag
+PASS T13 proposed type
+PASS T13 override note demanded only where the workbook demands it
+PASS T4 submit refused without override note
+PASS Overstated coding refused without a type
+PASS All 13 scenarios submit with the workbook verdict
+PASS G1 agent cannot write an answer
+PASS G1 agent cannot change an evaluation
+PASS G1 agent cannot create a coding
+PASS G1 agent cannot write a verdict
+PASS G1 agent cannot finalize a claim
+PASS G1 lead sign-in cannot write answers
+PASS G3 coder's edit of a submitted coding changes nothing
+PASS G3 even the administrator cannot edit a submitted answer
+PASS G3 even the administrator cannot edit a submitted evaluation
+PASS G3 coder cannot set status directly
+PASS G3 claim wording fixed after submission
+PASS G6 NA refused on C1
+PASS Coder not assigned cannot code the claim
+PASS G5 submission refused with a missing rationale
+PASS G2 Gene (coder) cannot see Adam's draft answers
+PASS G2 Gene (lead sign-in) cannot see Adam's draft
+PASS G2 rule functions refuse another coder's draft
+PASS G2 agent cannot see unsubmitted codings
+PASS D1 after Adam submits, Gene's lead sign-in still cannot see it while Gene's own coding is a draft
+PASS G2 after Adam submits, Gene (coder) still cannot see it
+PASS G2 agent can see Adam's submitted coding
+PASS G2 Adam cannot see Gene's draft
+PASS G2 once both submit, each sees the other
+PASS Admin sign-in sees everything (maintenance only, logged)
+PASS Reconciliation agenda lists the two differing elements
+PASS D2 Gene (lead) cannot decide a claim she coded
+PASS D2 unassigned tie-breaker cannot decide
+PASS D2 a coder cannot be made tie-breaker
+PASS Two coders agree an element
+PASS Finalized verdict follows the reconciled evaluations
+PASS Unknown vulnerable-student code refused
+PASS G7 nothing public while the release is a draft
+PASS G7 agent cannot approve a release
+PASS G7 publisher cannot read coding tables
+PASS G7 publisher cannot call rule functions
+PASS G7 approved release appears in the census
+PASS Unverified who-was-studied pre-fill stays private
+PASS Verified who-was-studied is published with its rating
+PASS Release items locked after approval
+PASS G8 verdicts hidden while verdicts_public is off
+PASS G8 agent cannot turn verdicts on
+PASS G8 coder cannot turn verdicts on
+PASS G8 verdicts appear once the lead turns them on
+PASS Publisher records the WordPress revision
+PASS Agent cannot close a flag
+PASS Closing a flag needs a note
+PASS A human closes a flag with a note
+PASS D3 agent cannot pre-fill a human-only item
+PASS D3 agent cannot change a human answer
+PASS G11 audit refused with an unconfirmed agent pre-fill
+PASS Audit produces a flags profile by domain, no verdict
+PASS Agent cannot confirm a decision
+PASS Lead confirms an agent's draft decision
+PASS Double-coding draw is logged with its seed
+PASS Reliability runs on independent submissions
+PASS Administrator session logged
+PASS Funding: a funder needs a name
+PASS Agents edit the funding area
+PASS Coders cannot reach the funding area
+PASS G9 change log cannot be edited (lead)
+PASS G9 change log cannot be edited (administrator)
+PASS G9 every change is logged with who made it
+PASS G10 every coding records its protocol version
+
+145/145 passed
