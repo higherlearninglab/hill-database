@@ -1,6 +1,6 @@
 # HiLL database
 
-The database behind the Higher Learning Lab Evidence Tracker on AI, learning and attachment, and HiLL's funding records.
+The database behind the Higher Learning Lab evidence trackers (Claim Check: AI in Education, and the meta-analysis audit) and HiLL's funding records.
 
 This repository holds the structure only. It contains no study data, no coding results and no passwords.
 
@@ -21,6 +21,8 @@ The database enforces these rules itself, so they do not depend on any person or
 11. **Agent pre-fills in synthesis audits must be confirmed by a human** before the audit can be submitted.
 12. **No one settles a disagreement on their own coding.**
 13. **Ratings are derived, not chosen.** Under CERIC-T v0.3 the database derives each rating and its severity from the element evaluations, the CER summary and the answers. A coder cannot set or override them.
+14. **A tie-breaker never codes the Claim.** No one assigned to code a Claim can be named its tie-breaker, and a Claim's tie-breaker cannot be assigned to code it.
+15. **The Dependence item is confirmed by a person and never affects a rating.** An agent may pre-fill it with quoted passages. A coder or the lead confirms it, and a person who still has coding to submit on the study cannot see or confirm it. An agent cannot confirm it or change a confirmed record.
 
 ## The rating scale (CERIC-T v0.3, draft)
 
@@ -42,11 +44,15 @@ Applied in order; the first rule that matches governs:
 
 Every rating below Supported carries a derived line naming where the argument falls short. Cannot be evaluated carries no severity.
 
-CERIC-T v0.3 is a draft. It has not been piloted, and calibration may change these rules.
+CERIC-T v0.3 is a draft. A first calibration round was coded under it in November 2026, and a revised version (v0.4) is in preparation. Scripts are added here only after they are live in the database and their tests pass, so v0.4 is not in this repository yet.
+
+## The Dependence item
+
+Reported beside the rating for any study of a student-facing learning support. It records whether the tool is designed to hand responsibility to the student over time (fades; fixed or on demand; not reported; not applicable), whether the study measured that transfer (measured: transferred; measured: not transferred; not measured; not applicable), and whether a teacher has a role (yes; no; not reported; not applicable), each with a quoted passage and page. It is not an input to any element evaluation or rating.
 
 ## Files
 
-Apply the four scripts in this order.
+Apply the six scripts in this order.
 
 | File | What it is |
 |---|---|
@@ -54,8 +60,12 @@ Apply the four scripts in this order.
 | `hill-db-v03.sql` | CERIC-T v0.3: 42 questions by code, stored per protocol version; the CER summary and the Evidence tier; the half rule; reconciliation of the CER summary and the tier; publication status |
 | `hill-db-rating-scale.sql` | The five-rating scale and its rules; the derived "falls short at" line; the overall result is named a rating throughout |
 | `hill-db-no-rating-override.sql` | Under v0.3 a coder cannot set or override the rating or severity |
-| `run_tests_v03.py` | 172 automated tests of the database as it is now: 48 rule scenarios, and a test of every safeguard above, run by signing in as each role |
-| `test-results-2026-11-10.txt` | Results of those tests |
+| `hill-db-tiebreak-guard.sql` | A tie-breaker cannot be someone assigned to code the Claim |
+| `hill-db-dependence-item.sql` | The Dependence item: agent pre-fill, human confirmation, visibility rule and public view |
+| `run_tests_v03.py` | 190 automated tests of the database as it is now: 48 rule scenarios, and a test of every safeguard above, run by signing in as each role |
+| `test-results-2026-11-11.txt` | Results of those tests |
+| `test-results-2026-11-10.txt` | Results of the 172 tests as they stood before the last two scripts |
+| `agreement-report.sql` | A read-only report for the lead on agreement between two coders: percent agreement, Cohen's kappa with an interval, Gwet's AC2 and the override rate for each element, and agreement on the rating, the CER summary and the Evidence tier |
 | `run_tests.py`, `test-results-2026-11-09.txt` | The 145 tests of the first build alone, and their results |
 
 Question and checklist wording is held back until HiLL publishes the codebook. These scripts list questions and checklist items by code only.
@@ -72,6 +82,8 @@ psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-phase2.sql
 psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v03.sql
 psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-rating-scale.sql
 psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-no-rating-override.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-tiebreak-guard.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-dependence-item.sql
 PGDATABASE=hilltest HILL_TEST_ADMIN=<admin user> python3 run_tests_v03.py
 ```
 
