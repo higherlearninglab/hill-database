@@ -1,0 +1,274 @@
+--- a/server.py	2026-11-13 15:51:58.052860688 -0800
++++ b/server.py	2026-11-13 15:51:58.057787573 -0800
+@@ -14,6 +14,7 @@
+ import time
+ 
+ import psycopg
++from psycopg.types.json import Jsonb
+ from psycopg.rows import dict_row
+ from fastapi import FastAPI, HTTPException, Request
+ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+@@ -515,7 +516,7 @@
+ EDITABLE = {"supportable_claim", "supportable_claim_type", "mark_c3_opposite_direction", "mark_r7_fallacy_carries_claim",
+             "mark_i7_no_limitations", "final_rating", "final_severity", "overstated_type", "type_reason", "override_note",
+             "cer_summary", "cer_summary_reason", "evidence_tier",
+-            "has_qualitative_data", "supplement_seen", "reporting_error_note", "reporting_error_open_data",
++            "supplement_seen", "reporting_error_note", "reporting_error_open_data",
+             "coder_claim_type"}
+ 
+ 
+@@ -527,14 +528,6 @@
+     sets = ", ".join(f"{k} = %s" for k in fields)
+     with db(current_login(request)) as c:
+         c.execute(f"UPDATE tracker.codings SET {sets} WHERE coding_id = %s", (*fields.values(), coding_id))
+-        if "has_qualitative_data" in fields:
+-            # The screener controls E8c and R1b: Not applicable without qualitative data, to be answered with it.
+-            if fields["has_qualitative_data"] is False:
+-                for code in ("E8c", "R1b"):
+-                    c.execute("""INSERT INTO tracker.answers (coding_id, question_code, answer) VALUES (%s, %s, 'NA')
+-                                 ON CONFLICT (coding_id, question_code) DO UPDATE SET answer = 'NA', note = NULL""", (coding_id, code))
+-            elif fields["has_qualitative_data"] is True:
+-                c.execute("DELETE FROM tracker.answers WHERE coding_id = %s AND question_code IN ('E8c','R1b') AND answer = 'NA'", (coding_id,))
+         return coding_state(c, coding_id)
+ 
+ 
+@@ -736,6 +729,88 @@
+     return corrections(request)
+ 
+ 
++# ----------------------------------------------------------------------
++# Supplemental ratings: Dependence, Durability and Who was studied.
++# An agent pre-fills; a coder or the lead confirms. Never an input to a rating.
++# Every query runs under the person's own coder sign-in, so the database decides what they may see and change.
++# ----------------------------------------------------------------------
++SUPP = {
++    "dependence": ("tracker.study_dependence", "tracker.confirm_dependence", "confirmed_by", "confirmed_at",
++                   ["tool_design", "tool_design_quote", "tool_design_page", "transfer_evidence", "transfer_quote", "transfer_page",
++                    "teacher_role", "teacher_quote", "teacher_page", "note"]),
++    "durability": ("tracker.study_durability", "tracker.confirm_durability", "confirmed_by", "confirmed_at",
++                   ["measured_after_removal", "measured_quote", "measured_page", "interval_after",
++                    "effect_held", "effect_quote", "effect_page", "note"]),
++    "who": ("tracker.who_was_studied", "tracker.confirm_who_was_studied", "verified_by", "verified_at",
++            ["w1_stage", "w2_described", "w3_analyzed", "w4_omission_acknowledged", "quotes"]),
++}
++
++
++def _supp_available(c) -> bool:
++    return c.execute("SELECT to_regclass('tracker.study_durability') IS NOT NULL AS ok").fetchone()["ok"]
++
++
++def _supp_state(c):
++    out = {}
++    for item, (table, _fn, by, at, fields) in SUPP.items():
++        extra = ", rating" if item == "who" else ""
++        rows = c.execute(f"""SELECT x.study_id, {", ".join("x." + f for f in fields)}{extra},
++                                    (SELECT p.name FROM admin.people p WHERE p.person_id = x.{by}) AS confirmed_by,
++                                    x.{at} AS confirmed_at,
++                                    (SELECT p.name FROM admin.people p WHERE p.person_id = x.prefilled_by) AS prefilled_by
++                             FROM {table} x""").fetchall()
++        for r in rows:
++            if item == "who":
++                r["w1_stage"] = r["w1_stage"] and str(r["w1_stage"])
++            out.setdefault(r.pop("study_id"), {})[item] = r
++    studies = c.execute("SELECT study_id, citation FROM tracker.studies WHERE study_id = ANY(%s) ORDER BY study_id",
++                        (list(out),)).fetchall()
++    for s in studies:
++        s.update({k: out[s["study_id"]].get(k) for k in SUPP})
++    return {"studies": studies,
++            "categories": c.execute("SELECT code, label FROM tracker.vulnerable_categories ORDER BY grouping, label").fetchall(),
++            "stages": [r["v"] for r in c.execute("SELECT unnest(enum_range(NULL::tracker.dev_stage))::text AS v")]}
++
++
++@app.get("/api/supplemental")
++def supplemental(request: Request):
++    with db(current_login(request)) as c:
++        if not _supp_available(c):
++            raise HTTPException(404, "Supplemental ratings are not available yet")
++        return _supp_state(c)
++
++
++@app.patch("/api/supplemental/{study_id}/{item}")
++def supplemental_change(study_id: str, item: str, body: dict, request: Request):
++    if item not in SUPP:
++        raise HTTPException(404, "No such record")
++    table, _fn, _by, _at, fields = SUPP[item]
++    sets = {k: v for k, v in body.items() if k in fields}
++    if not sets:
++        raise HTTPException(400, "Nothing to change")
++    for k in ("quotes",):
++        if k in sets:
++            sets[k] = Jsonb(sets[k])
++    for k, v in list(sets.items()):
++        if isinstance(v, str) and not v.strip():
++            sets[k] = None
++    with db(current_login(request)) as c:
++        cur = c.execute(f"UPDATE {table} SET {', '.join(k + ' = %s' for k in sets)} WHERE study_id = %s",
++                        (*sets.values(), study_id))
++        if cur.rowcount == 0:
++            raise HTTPException(404, "No record for this study that you can change")
++        return _supp_state(c)
++
++
++@app.post("/api/supplemental/{study_id}/{item}/confirm")
++def supplemental_confirm(study_id: str, item: str, request: Request):
++    if item not in SUPP:
++        raise HTTPException(404, "No such record")
++    with db(current_login(request)) as c:
++        c.execute(f"SELECT {SUPP[item][1]}(%s)", (study_id,))
++        return _supp_state(c)
++
++
+ # ---------------------------------------------------------------- lead functions
+ # The lead view is a switch inside the lead's own app account (Gene's decision, 2026-11-10). Every lead request
+ # still runs as the separate lead database sign-in, so the database's own rules stay in force: who may add studies,
+--- a/static/app.js	2026-11-13 15:51:58.054885091 -0800
++++ b/static/app.js	2026-11-13 15:51:58.059789312 -0800
+@@ -108,8 +108,8 @@
+     return h("span", { class: "ev " + v.split(" ")[0] }, v);
+   }
+   let errTimer;
+-  function showError(msg) {
+-    const e = $("#error"); e.textContent = msg; e.hidden = false;
++  function showError(msg, good) {
++    const e = $("#error"); e.textContent = msg; e.hidden = false; e.style.background = good ? "#1f6b3f" : "";
+     clearTimeout(errTimer); errTimer = setTimeout(() => (e.hidden = true), 7000);
+   }
+   // Saves run one at a time, in the order the coder made them, and each builds its
+@@ -389,9 +389,6 @@
+         h("p", { class: "text" }, "What type of Claim is this, as the authors state it? (The record says: " + c.claim_type + ". Give your own reading.)"),
+         h("select", { id: "ctype4", style: "font:inherit;font-size:16px;padding:10px 14px;min-width:320px;", onchange: (e) => saveField("coder_claim_type", e.target.value) },
+           h("option", { value: "" }, "Choose…"), CLAIM_TYPES.map((t) => h("option", { value: t }, t))))),
+-      h("div", { class: "q" }, h("div", { class: "code" }, "Data"), h("div", {},
+-        h("p", { class: "text" }, "Does the Evidence for this Claim also include qualitative data? (Yes shows two further questions, E8c and R1b.)"),
+-        YESNO("qual4", "has_qualitative_data"))),
+       h("div", { class: "q" }, h("div", { class: "code" }, "Supp."), h("div", {},
+         h("p", { class: "text" }, "Do you have the article's supplement? It is required before E3 and E4. If it cannot be obtained, answer E3 and E4 from the main text."),
+         YESNO("supp4", "supplement_seen", "Yes, I have it", "No, not obtainable or none")))));
+@@ -524,7 +521,6 @@
+         b.className = on ? "on " + reading(q.code, a) : "";
+         b.disabled = lock;
+       });
+-      if (q.shown_if) $('[data-qrow="' + q.code + '"]').style.display = c.has_qualitative_data === true ? "" : "none";   // screener-only questions
+       const note = $('textarea[data-note="' + q.code + '"]');
+       setVal(note, c.answers[q.code] ? c.answers[q.code].note : "");
+       if (note.value) note.hidden = false;
+@@ -582,7 +578,7 @@
+     for (const el of ELEMENTS) { const e = c.summary[el] || {}; es.append(h("div", { style: "display:flex;justify-content:space-between;margin:3px 0" }, h("span", {}, el), evChip(e.effective))); }
+     if (c.two_ratings) {
+       setVal($("#ctype4"), c.coder_claim_type); $("#ctype4").disabled = lock;
+-      for (const f of ["has_qualitative_data", "supplement_seen"]) $$('[data-yn="' + f + '"] button').forEach((b) => {
++      for (const f of ["supplement_seen"]) $$('[data-yn="' + f + '"] button').forEach((b) => {
+         const on = c[f] !== null && c[f] !== undefined && String(c[f]) === b.dataset.ynv; b.className = on ? "on fav" : ""; b.disabled = lock; });
+       setVal($("#flag_note"), c.reporting_error_note); setVal($("#flag_open"), c.reporting_error_open_data == null ? "" : String(c.reporting_error_open_data));
+       $("#flag_note").disabled = lock; $("#flag_open").disabled = lock;
+@@ -727,6 +723,7 @@
+     const who = $("#who"); who.innerHTML = "";
+     who.append(h("span", {}, S.me.name + " · " + S.me.login_role));
+     if (S.me.lead) who.append(" · ", h("button", { class: "linkbtn", id: "leadbtn", onclick: openLead }, "Lead view"));
++    if (S.suppOk) who.append(" · ", h("button", { class: "linkbtn", id: "suppbtn", onclick: openSupp }, "Supplemental Ratings"));
+     if (window.HILL_API) return;                                    // preview: no account controls
+     if (window.PublicKeyCredential) who.append(" · ", h("button", { class: "linkbtn", onclick: addPasskey }, S.me.passkeys ? "Add a passkey" : "Set up passkey"));
+     if (!S.me.phone_code && !S.me.passkeys) who.append(" · ", h("button", { class: "linkbtn", onclick: openEnroll }, "Set up phone code"));
+@@ -854,9 +851,102 @@
+       h("div", { class: "small", style: "margin-top:10px" }, "Full texts are never uploaded here; this records only whether HiLL has the PDF.")));
+   }
+ 
++  // ---------------------------------------------------------------- supplemental ratings
++  // Dependence, Durability and Who was studied. An agent pre-fills each record with a quoted passage; a coder or
++  // the lead confirms it here. None of them is an input to an evaluation or a rating. The database decides what
++  // each person may see, change and confirm.
++  const SUPP_ITEMS = {
++    dependence: { title: "Dependence", fields: [
++      ["tool_design", "Tool design", ["fades", "fixed or on demand", "not reported", "not applicable"], "tool_design_quote", "tool_design_page"],
++      ["transfer_evidence", "Evidence of transfer", ["measured: transferred", "measured: not transferred", "not measured", "not applicable"], "transfer_quote", "transfer_page"],
++      ["teacher_role", "Teacher role", ["yes", "no", "not reported", "not applicable"], "teacher_quote", "teacher_page"]] },
++    durability: { title: "Durability", fields: [
++      ["measured_after_removal", "Measured after access to the AI tool was removed", ["yes", "measured, result not reported", "no", "not applicable"], "measured_quote", "measured_page"],
++      ["interval_after", "How long after", null, null, null],
++      ["effect_held", "Whether the effect held (compared with the result while the tool was available)", ["held", "reduced", "reversed", "not measured"], "effect_quote", "effect_page"]] },
++    who: { title: "Who was studied" }
++  };
++  const cap = (v) => v.charAt(0).toUpperCase() + v.slice(1);
++  async function openSupp() {
++    stopReconPolling(); S.recon = null; S.coding = null; S.lead = null;
++    try { S.supp = await API.get("/api/supplemental"); renderSupp(); } catch (e) { showError(e.message); }
++  }
++  async function suppAct(fn, done) {
++    try { S.supp = await fn(); renderSupp(); if (done) showError(done, true); } catch (e) { showError(e.message); }
++  }
++  function suppStatus(r) {
++    if (r.confirmed_by) return h("span", { class: "ev Supported", "data-supp-status": "confirmed" }, "Confirmed by " + r.confirmed_by + " on " + String(r.confirmed_at).slice(0, 10));
++    return h("span", { class: "ev Some", "data-supp-status": "awaiting" }, "Awaiting confirmation" + (r.prefilled_by ? " · pre-filled by " + r.prefilled_by : ""));
++  }
++  function renderSupp() {
++    const D = S.supp, main = $("#main"), box = $("#result"); main.innerHTML = ""; box.innerHTML = "";
++    main.append(h("section", { class: "claimhead", id: "supphead" },
++      h("div", { class: "cite" }, "Supplemental Ratings"),
++      h("blockquote", {}, "Dependence, Durability, and Who was studied"),
++      h("div", { class: "meta" }, h("span", {}, "An agent pre-fills each record with a quoted passage and page. Check each one against the full text, correct it if needed, and confirm it. One person's confirmation completes a record. These records never change an evaluation or a rating."))));
++    box.append(h("div", { class: "panel" }, h("h2", {}, "How these are shown to readers"),
++      h("div", { class: "small" }, "Green: studied and reported. Yellow: studied, but not reported or not analyzed. Red: not studied. Gray: cannot be evaluated. Only confirmed records of released studies are published.")));
++    for (const st of D.studies) {
++      const sec = h("section", { class: "element", "data-supp-study": st.study_id },
++        h("div", { class: "head" }, h("h3", {}, st.study_id)), h("div", { class: "def" }, st.citation));
++      for (const item of ["dependence", "durability", "who"]) {
++        const r = st[item], key = st.study_id + ":" + item;
++        const blk = h("div", { class: "q", "data-supp": key }, h("div", { class: "code" }, { dependence: "Dep", durability: "Dur", who: "Who" }[item]), h("div", {}));
++        const body = blk.lastChild;
++        body.append(h("p", { class: "text" }, SUPP_ITEMS[item].title));
++        if (!r) { body.append(h("div", { class: "small", "data-supp-status": "none" }, "No record yet.")); sec.append(blk); continue; }
++        body.append(h("div", { style: "margin:4px 0 12px" }, suppStatus(r)));
++        const get = (f) => { const e = blk.querySelector('[data-sf="' + f + '"]'); return e ? e.value : undefined; };
++        let collect;
++        if (item === "who") {
++          const boxes = (f, label) => h("details", { style: "margin:0 0 12px" }, h("summary", {}, label + ": " + (r[f].length ? r[f].map((c) => (D.categories.find((x) => x.code === c) || { label: c }).label).join("; ") : "none")),
++            D.categories.map((c) => h("label", { class: "small", style: "display:block;padding:6px 0" }, h("input", Object.assign({ type: "checkbox", "data-sfbox": f, value: c.code }, r[f].includes(c.code) ? { checked: "" } : {})), " " + c.label)));
++          body.append(h("label", { class: "small" }, "Developmental stage or level"),
++            h("select", { "data-sf": "w1_stage", style: LIN }, h("option", { value: "" }, "Not recorded"), D.stages.map((v) => h("option", Object.assign({ value: v }, r.w1_stage === v ? { selected: "" } : {}), v))),
++            boxes("w2_described", "Groups described in the sample"), boxes("w3_analyzed", "Groups with effects analyzed separately"),
++            h("label", { class: "small" }, "The authors acknowledge not analyzing effects by group"),
++            h("select", { "data-sf": "w4_omission_acknowledged", style: LIN }, [["", "Not recorded"], ["true", "Yes"], ["false", "No"]].map(([v, t]) => h("option", Object.assign({ value: v }, String(r.w4_omission_acknowledged == null ? "" : r.w4_omission_acknowledged) === v ? { selected: "" } : {}), t))),
++            h("div", { class: "small", "data-supp-result": key }, "Result: " + r.rating));
++          const qs = r.quotes || {};
++          for (const k of Object.keys(qs)) {
++            const v = qs[k];
++            body.append(h("div", { class: "small", style: "margin-top:8px" }, typeof v === "string" ? v : (k.toUpperCase() + ": “" + (v.quote || "") + "”" + (v.page ? " (p. " + String(v.page).replace(/^p\.\s*/, "") + ")" : "") + (v.note ? " — " + v.note : ""))));
++          }
++          collect = () => {
++            const arr = (f) => Array.from(blk.querySelectorAll('[data-sfbox="' + f + '"]')).filter((b) => b.checked).map((b) => b.value);
++            const w4 = get("w4_omission_acknowledged");
++            return { w1_stage: get("w1_stage") || null, w2_described: arr("w2_described"), w3_analyzed: arr("w3_analyzed"), w4_omission_acknowledged: w4 === "" ? null : w4 === "true" };
++          };
++        } else {
++          for (const [f, label, opts, qf, pf] of SUPP_ITEMS[item].fields) {
++            body.append(h("label", { class: "small" }, label));
++            if (opts) body.append(h("select", { "data-sf": f, style: LIN }, opts.map((v) => h("option", Object.assign({ value: v }, r[f] === v ? { selected: "" } : {}), cap(v)))));
++            else body.append(h("input", { "data-sf": f, style: LIN, value: r[f] || "" }));
++            if (qf) body.append(h("label", { class: "small" }, "Quoted passage"), h("textarea", { "data-sf": qf, rows: 2, style: LIN }, r[qf] || ""),
++              h("label", { class: "small" }, "Page"), h("input", { "data-sf": pf, style: LIN, value: r[pf] || "" }));
++          }
++          if (r.note) body.append(h("div", { class: "small", style: "margin-bottom:12px" }, "Agent’s note: " + r.note));
++          collect = () => { const o = {}; for (const [f, , , qf, pf] of SUPP_ITEMS[item].fields) { o[f] = get(f); if (qf) { o[qf] = get(qf); o[pf] = get(pf); } } return o; };
++        }
++        const path = "/api/supplemental/" + st.study_id + "/" + item;
++        body.append(h("div", { style: "margin-top:12px" },
++          h("button", { type: "button", class: "linkbtn", "data-supp-save": key, onclick: () => suppAct(() => API.patch(path, collect()), "Saved. A change clears any earlier confirmation.") }, "Save changes"), " ",
++          r.confirmed_by ? null : h("button", { type: "button", class: "submit", "data-supp-confirm": key, onclick: (e) => {
++            const b = e.currentTarget;
++            if (b.dataset.armed) return suppAct(() => API.post(path + "/confirm"));
++            b.dataset.armed = "1"; b.textContent = "Click again to confirm as " + S.me.name;
++          } }, "Confirm this record")));
++        sec.append(blk);
++      }
++      main.append(sec);
++    }
++    if (!D.studies.length) main.append(h("div", { class: "empty" }, "No records to confirm yet."));
++  }
++
+   async function start() {
+     try {
+       S.me = await API.get("/api/me");
++      try { await API.get("/api/supplemental"); S.suppOk = true; } catch (e) { S.suppOk = false; }
+       renderAccount();
+       if (window.HILL_BANNER) $("#banner").append(h("div", { class: "preview-banner" }, window.HILL_BANNER));
+       await loadClaims();
