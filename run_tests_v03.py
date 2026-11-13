@@ -1,7 +1,7 @@
 """HiLL database tests for CERIC-T v0.3 and the five-rating scale.
 
 Run against a scratch database built from hill-db-phase2.sql, hill-db-v03.sql, hill-db-rating-scale.sql
-and hill-db-no-rating-override.sql, in that order.
+hill-db-no-rating-override.sql, hill-db-tiebreak-guard.sql and hill-db-dependence-item.sql, in that order.
 
 Part A: rule scenarios for protocol and decision rules v0.3 (half rule, triggers, CER summary, tier, the five ratings).
 Part B: permissions and safeguards (guarantees 1-12, D1-D3).
@@ -488,8 +488,12 @@ check("C6 every answer carries its coding's protocol version",
       q("gene_admin", "SELECT count(*) FROM tracker.answers a JOIN tracker.codings c USING (coding_id) WHERE a.protocol_version IS DISTINCT FROM c.protocol_version")[0][0] == 0)
 
 # Versions side by side: a coding recorded under v0.2 still uses the v0.2 questions and rules
-check("C7 both question sets are kept",
-      q("gene_coder", "SELECT protocol_version, count(*) FROM tracker.questions GROUP BY 1 ORDER BY 1") == [("CERIC-T v0.2", 36), ("CERIC-T v0.3", 42)])
+check("C7 every question set is kept (v0.2, v0.3, and v0.4 once its file is applied)",
+      q("gene_coder", "SELECT protocol_version, count(*) FROM tracker.questions GROUP BY 1 ORDER BY 1") in (
+          [("CERIC-T v0.2", 36), ("CERIC-T v0.3", 42)],
+          [("CERIC-T v0.2", 36), ("CERIC-T v0.3", 42), ("CERIC-T v0.4", 41)]))
+check("C7 v0.3 is still the current protocol",
+      q("gene_admin", "SELECT value FROM admin.settings WHERE key = 'protocol_version'")[0][0] == "CERIC-T v0.3")
 with conn("gene_admin") as c:
     c.execute("SET ROLE hill_owner")
     c.execute("UPDATE admin.settings SET value='CERIC-T v0.2' WHERE key='protocol_version'")
@@ -603,6 +607,17 @@ sub = q("postgres", """SELECT count(*), count(*) FILTER (WHERE final_rating IS N
                                count(*) FILTER (WHERE final_severity IS NULL AND final_rating <> 'Cannot be evaluated')
                         FROM tracker.codings WHERE status = 'submitted' AND protocol_version = %s""", (PV,))[0]
 check("C14 every submitted v0.3 coding carries the derived rating and severity", sub[0] > 0 and sub[1] == 0 and sub[2] == 0, str(sub))
+# A tie-breaker cannot be someone assigned to code the Claim, and the other way round
+with conn("agent_claude") as c:
+    c.execute("INSERT INTO tracker.studies (study_id, citation, strand) VALUES ('S0400','Tie-breaker test study','census')")
+with conn("gene_coder") as c:
+    c.execute("INSERT INTO tracker.claims (claim_id, study_id, main_claim, claim_type) VALUES ('S0400-C01','S0400','Tie-breaker claim','Cause-effect')")
+q("gene_lead", "INSERT INTO tracker.assignments (claim_id, coder_id) VALUES ('S0400-C01',2)")
+expect_error("C15 a person assigned to code a Claim cannot be named its tie-breaker, even before starting", "gene_lead",
+             "SELECT tracker.assign_tiebreak('S0400-C01', 2)", None, "cannot be a coder")
+q("gene_lead", "SELECT tracker.assign_tiebreak('S0400-C01', 3)")
+expect_error("C15 a Claim's tie-breaker cannot be assigned to code it", "gene_lead",
+             "INSERT INTO tracker.assignments (claim_id, coder_id) VALUES ('S0400-C01',3)", None, "cannot be assigned to code it")
 ri = q("gene_lead", "SELECT * FROM tracker.reliability_items(%s)", (PV,))
 check("C10 agreement on S1 and tier is reported", ri == [("CER summary", 4, 75.0), ("Evidence tier", 4, 75.0)] or
       [(r[0], r[1], float(r[2])) for r in ri] == [("CER summary", 4, 75.0), ("Evidence tier", 4, 75.0)], str(ri))
@@ -626,6 +641,364 @@ check("C12 the published rating carries the CER summary and the Evidence tier",
       == [("Supported with concerns", "Y", "Promising", "Implications (Some concerns)")])
 q("gene_lead", "SELECT admin.set_setting('ratings_public','off')")
 expect_error("C12 publisher cannot read reconciliation items", "wp_publisher", "SELECT * FROM tracker.reconciliation_items", None, "permission denied")
+
+
+# C16-C22: Dependence item (transfer of responsibility), reported beside the rating
+with conn("postgres") as c:
+    c.execute("INSERT INTO tracker.studies (study_id, citation, strand) VALUES ('S0950','Dependence test study','census')")
+    c.execute("INSERT INTO tracker.claims (claim_id, study_id, main_claim, claim_type) VALUES ('S0950-C01','S0950','Dependence test claim','Cause-effect')")
+    c.execute("INSERT INTO tracker.assignments (claim_id, coder_id) VALUES ('S0950-C01',2)")
+DEP = ("INSERT INTO tracker.study_dependence (study_id, tool_design, tool_design_quote, tool_design_page, transfer_evidence, teacher_role) "
+       "VALUES (%s, %s, %s, 'p. 4', 'not measured', 'not reported')")
+expect_error("C16 a design value needs its quoted passage", "agent_claude", DEP, ("S0950", "fades", None), "violates check constraint")
+q("agent_claude", DEP, ("S0950", "fixed or on demand", "Students could ask the tutor for help at any time."))
+q("agent_claude", DEP, ("S0100", "not reported", None))
+expect_error("C16 a coder cannot create a Dependence record", "gene_coder", DEP, ("S0001", "not reported", None), "")
+check("C17 a coder with coding still to submit on the study cannot see its record",
+      q("adam_coder", "SELECT count(*) FROM tracker.study_dependence WHERE study_id='S0950'")[0][0] == 0)
+check("C17 a coder with nothing left to submit on the study can see it",
+      q("gene_coder", "SELECT count(*) FROM tracker.study_dependence WHERE study_id='S0950'")[0][0] == 1)
+expect_error("C18 a coder with coding still to submit cannot confirm", "adam_coder",
+             "SELECT tracker.confirm_dependence('S0950')", None, "Submit your coding")
+expect_error("C18 an agent cannot confirm", "agent_claude", "SELECT tracker.confirm_dependence('S0950')", None, "permission denied")
+expect_error("C18 a coder cannot set the confirmation directly", "gene_coder",
+             "UPDATE tracker.study_dependence SET confirmed_by=1, confirmed_at=now() WHERE study_id='S0950'", None, "permission denied")
+q("gene_coder", "SELECT tracker.confirm_dependence('S0950')")
+check("C19 a coder confirms a record", q("gene_lead", "SELECT confirmed_by FROM tracker.study_dependence WHERE study_id='S0950'") == [(1,)])
+expect_error("C20 an agent cannot change a confirmed record", "agent_claude",
+             "UPDATE tracker.study_dependence SET teacher_role='not applicable' WHERE study_id='S0950'", None, "agent cannot change it")
+q("gene_lead", "UPDATE tracker.study_dependence SET teacher_role='not applicable' WHERE study_id='S0950'")
+check("C20 a person's change clears the confirmation", q("gene_lead", "SELECT confirmed_by FROM tracker.study_dependence WHERE study_id='S0950'") == [(None,)])
+expect_error("C21 no one can delete a record", "gene_lead", "DELETE FROM tracker.study_dependence WHERE study_id='S0950'", None, "permission denied")
+expect_error("C21 the publisher cannot read the working table", "wp_publisher", "SELECT * FROM tracker.study_dependence", None, "permission denied")
+check("C22 an unconfirmed record is not published", q("wp_publisher", "SELECT count(*) FROM tracker.public_dependence")[0][0] == 0)
+q("adam_coder", "SELECT tracker.confirm_dependence('S0100')")
+check("C22 a confirmed record of a released study is published",
+      q("wp_publisher", "SELECT study_id, tool_design FROM tracker.public_dependence") == [("S0100", "not reported")])
+check("C22 the rating is unchanged by the Dependence record",
+      q("gene_lead", "SELECT rating::text FROM tracker.reconciled_claims WHERE claim_id='S0100-C01'") == [("Supported with concerns",)])
+
+# ----------------------------------------------------------------------
+# D1-D16: CERIC-T v0.4 (runs only when the v0.4 scripts have been applied)
+# ----------------------------------------------------------------------
+V4 = "CERIC-T v0.4"
+if q("gene_admin", "SELECT count(*) FROM tracker.protocol_versions WHERE version = %s", (V4,))[0][0] == 1 \
+   and q("gene_admin", "SELECT count(*) FROM pg_proc WHERE proname = 'coding_result_v04'")[0][0] == 1:
+    Q4 = [r[0] for r in q("gene_coder", "SELECT code FROM tracker.questions WHERE protocol_version = %s ORDER BY element, position", (V4,))]
+    check("D1 41 questions loaded for v0.4", len(Q4) == 41, str(len(Q4)))
+
+    def setpv(v):
+        with conn("gene_admin") as c:
+            c.execute("SET ROLE hill_owner")
+            c.execute("UPDATE admin.settings SET value=%s WHERE key='protocol_version'", (v,))
+
+    def make4(n, answers=None, finals=None, s1="Y", why=None, ctype=CE, qual=False, supp=True, own=True, supportable=None, ctyped=True):
+        sid = f"S{960 + n:04d}"; cid = f"{sid}-C01"
+        with conn("agent_claude") as c:
+            c.execute("INSERT INTO tracker.studies (study_id, citation, strand) VALUES (%s,%s,'census')", (sid, f"v0.4 test study {n}"))
+        with conn("gene_coder") as c:
+            c.execute("INSERT INTO tracker.claims (claim_id, study_id, main_claim, claim_type) VALUES (%s,%s,%s,%s)", (cid, sid, f"v0.4 claim {n}", ctype))
+        q("gene_lead", "INSERT INTO tracker.assignments (claim_id, coder_id) VALUES (%s,1)", (cid,))
+        setpv(V4)
+        try:
+            coding = q("gene_coder", "INSERT INTO tracker.codings (claim_id, cer_summary, cer_summary_reason, evidence_tier, has_qualitative_data, supplement_seen, coder_claim_type) "
+                       "VALUES (%s,%s,%s,'Strong',%s,%s,%s) RETURNING coding_id", (cid, s1, why, qual, supp, ctype if ctyped else None))[0][0]
+        finally:
+            setpv(PV)
+        ans = {"E8c": "NA", "R1b": "NA"}; ans.update(answers or {})
+        finals = finals or {}
+        with conn("gene_coder") as c:
+            for code in Q4:
+                c.execute("INSERT INTO tracker.answers (coding_id, question_code, answer) VALUES (%s,%s,%s)", (coding, code, ans.get(code, "Y")))
+            for el in ELS:
+                c.execute("INSERT INTO tracker.element_evaluations (coding_id, element, final_evaluation, rationale, own_evaluation) VALUES (%s,%s,%s,%s,%s)",
+                          (coding, el, finals.get(el, S), f"Rationale for {el}.", finals.get(el, S) if own else None))
+            if supportable:
+                c.execute("UPDATE tracker.codings SET supportable_claim=%s, supportable_claim_type='Correlation' WHERE coding_id=%s", (supportable, coding))
+        return coding
+
+    def res4(coding):
+        return q("gene_coder", "SELECT claim_rating::text, implications_rating::text, falls_short, attention FROM tracker.coding_result_v04(%s)", (coding,))[0]
+
+    def final4(coding):
+        return q("gene_coder", "SELECT final_claim_rating::text, final_implications_rating::text, final_rating::text, final_severity::text, status "
+                 "FROM tracker.codings WHERE coding_id=%s", (coding,))[0]
+
+    check("D1 v0.3 is the current protocol again after a v0.4 coding is opened", q("gene_coder", "SELECT admin.setting('protocol_version')")[0][0] == PV)
+
+    d2 = make4(1)
+    check("D2 every answer favorable: Claim Supported, Implications Supported, nothing to fix", res4(d2) == (S, S, None, None), str(res4(d2)))
+    q("gene_coder", "SELECT tracker.submit_coding(%s)", (d2,))
+    check("D2 a submitted v0.4 coding carries two ratings and no single rating or severity", final4(d2) == (S, S, None, None, "submitted"), str(final4(d2)))
+
+    d3 = make4(2, {"E1": "N"}, {"Evidence": NS}, s1="N", why=WHY)
+    r = res4(d3)
+    check("D3 E1 answered No: Claim Not supported, Implications Not rated, supportable claim asked for",
+          r[0] == NS and r[1] == "Not rated" and "add the supportable claim" in (r[3] or ""), str(r))
+    expect_error("D3 it cannot be submitted without the supportable claim", "gene_coder", "SELECT tracker.submit_coding(%s)", (d3,), "add the supportable claim")
+    q("gene_coder", "UPDATE tracker.codings SET supportable_claim='AI use is associated with the outcome in this sample', supportable_claim_type='Correlation' WHERE coding_id=%s", (d3,))
+    q("gene_coder", "SELECT tracker.submit_coding(%s)", (d3,))
+    check("D3 submitted as Not supported / Not rated", final4(d3)[:2] == (NS, "Not rated"), str(final4(d3)))
+    check("D3 the route to Not supported is recorded as a trigger",
+          q("gene_coder", "SELECT not_supported_route FROM tracker.element_evaluations WHERE coding_id=%s AND element='Evidence'", (d3,)) == [("trigger",)])
+
+    d4 = make4(3, {"E1": "PN"}, {"Evidence": SC}, s1="PY")
+    check("D4 E1 answered Probably no is one ordinary concern: Claim Supported with concerns", res4(d4)[:2] == ("Supported with concerns", S), str(res4(d4)))
+
+    d5 = make4(4, U("I2", "I3", "I4", "I5", a="PN"), {"Implications": NS})
+    r = res4(d5)
+    check("D5 Implications Not supported with a sound argument: Claim Supported, Implications Overstated, no supportable claim",
+          r == (S, "Overstated", None, None), str(r))
+    q("gene_coder", "SELECT tracker.submit_coding(%s)", (d5,))
+    check("D5 the route is recorded as the half rule",
+          q("gene_coder", "SELECT not_supported_route FROM tracker.element_evaluations WHERE coding_id=%s AND element='Implications'", (d5,)) == [("half rule",)])
+
+    d6 = make4(5, {"E1": "NI"}, {"Evidence": NS}, s1="N", why=WHY)
+    r = res4(d6)
+    check("D6 E1 answered No information: Cannot be evaluated, Implications Not rated, no supportable claim wanted",
+          r[0] == "Cannot be evaluated" and r[1] == "Not rated" and r[3] is None, str(r))
+
+    d7 = make4(6, U("C4", "C5", a="PN"), {"Claim": NS}, s1="Y")
+    check("D7 S1 cannot be Yes when the Claim element is Not supported",
+          "when Claim, Evidence or Reasoning is Not supported" in (res4(d7)[3] or ""), str(res4(d7)))
+
+    d8 = make4(7, qual=None)
+    check("D8 the screener must be answered", "screener not answered" in (res4(d8)[3] or ""), str(res4(d8)))
+    d8b = make4(8, {"E8c": "Y", "R1b": "Y"})
+    check("D8 without qualitative data E8c and R1b must be Not applicable", "E8c and R1b must be Not applicable" in (res4(d8b)[3] or ""), str(res4(d8b)))
+    d8c = make4(9, {"E8c": "Y", "R1b": "Y"}, qual=True)
+    check("D8 with qualitative data E8c and R1b are answered", res4(d8c)[3] is None, str(res4(d8c)))
+    d8d = make4(10, {"E8c": "PN", "R1b": "PN"}, {"Evidence": SC, "Reasoning": SC}, s1="PY", qual=True)
+    check("D8 an unfavorable E8c is counted once: R1b must be Not applicable", "R1b must be Not applicable" in (res4(d8d)[3] or ""), str(res4(d8d)))
+
+    d9 = make4(11, U("E8a", "E8b", a="PN"), {"Evidence": SC}, s1="PY")
+    check("D9 unreported uncertainties are counted once: R1 must be Not applicable", "R1 must be Not applicable" in (res4(d9)[3] or ""), str(res4(d9)))
+    q("gene_coder", "UPDATE tracker.answers SET answer='NA' WHERE coding_id=%s AND question_code='R1'", (d9,))
+    check("D9 with R1 Not applicable the coding is complete", res4(d9)[3] is None, str(res4(d9)))
+    d9b = make4(12, {"R1": "NA"})
+    check("D9 R1 cannot be Not applicable otherwise", "R1 can be Not applicable only" in (res4(d9b)[3] or ""), str(res4(d9b)))
+
+    expect_error("D10 No information is not offered on I8", "gene_coder",
+                 "UPDATE tracker.answers SET answer='NI' WHERE coding_id=%s AND question_code='I8'", (d9b,), "No information is not offered")
+    expect_error("D11 a coder cannot set the Claim rating", "gene_coder",
+                 "UPDATE tracker.codings SET final_claim_rating='Supported', final_implications_rating='Supported' WHERE coding_id=%s", (d9b,), "")
+    expect_error("D11 Overstated is refused as a Claim rating", "gene_admin", "SELECT 'Overstated'::tracker.claim_rating", None, "invalid input value")
+
+    d12 = make4(13, own=False)
+    check("D12 the coder's own evaluation is required for each element", "your own evaluation is missing" in (res4(d12)[3] or ""), str(res4(d12)))
+    expect_error("D12 a recorded own evaluation cannot be changed", "gene_coder",
+                 "UPDATE tracker.element_evaluations SET own_evaluation='Not supported' WHERE coding_id=%s AND element='Claim'", (d9b,), "already recorded")
+    expect_error("D13 an agent cannot write a coder's own evaluation", "agent_claude",
+                 "UPDATE tracker.element_evaluations SET own_evaluation='Supported' WHERE coding_id=%s", (d12,), "")
+    expect_error("D13 an agent cannot answer the screener", "agent_claude",
+                 "UPDATE tracker.codings SET has_qualitative_data=true WHERE coding_id=%s", (d12,), "")
+
+    d13b = make4(17, ctyped=False)
+    check("D13 the coder's reading of the claim type is required", "type of the authors' Claim is not recorded" in (res4(d13b)[3] or ""), str(res4(d13b)))
+    d14 = make4(14, supportable="A narrower claim")
+    check("D14 a supportable claim is refused unless the Claim rating is Not supported", "only when the Claim rating is Not supported" in (res4(d14)[3] or ""), str(res4(d14)))
+
+    d15 = make4(15, {"R3": "N", "E10": "N"}, {"Evidence": SC, "Reasoning": SC}, s1="PY")
+    check("D15 E10 and R3 answered No are ordinary concerns for a Cause-effect Claim", res4(d15)[:2] == ("Supported with concerns", S), str(res4(d15)))
+
+    d16 = make4(16, U("C4", "C5", a="PN"), {"Claim": NS}, s1="PN", why=WHY, supportable="A narrower claim")
+    r = res4(d16)
+    check("D16 Claim element Not supported with sound Evidence and Reasoning: Claim rating Not supported, never Overstated",
+          r[0] == NS and r[1] == "Not rated" and r[2] == "Claim (Not supported), CER summary (Probably no)" and r[3] is None, str(r))
+    expect_error("D16 a v0.3 coding is refused by the v0.4 result function", "gene_coder", "SELECT * FROM tracker.coding_result_v04(%s)", (coding_ids[SCEN[0][0]],), "not CERIC-T v0.4")
+    check("D16 v0.3 codings keep their single rating", q("gene_admin", "SELECT count(*) FROM tracker.codings WHERE protocol_version=%s AND final_claim_rating IS NOT NULL", (PV,))[0][0] == 0)
+
+
+    # D17-D21: two coders, reconciliation and finalizing under v0.4
+    if q("gene_admin", "SELECT count(*) FROM pg_proc WHERE proname = 'finalize_claim_v04'")[0][0] == 1:
+        def double4(n, g_ans=None, g_fin=None, a_ans=None, a_fin=None, g_s1="Y", a_s1="Y", a_sup=None, g_sup=None, g_flag=None):
+            sid = f"S{980 + n:04d}"; cid = f"{sid}-C01"
+            with conn("agent_claude") as c:
+                c.execute("INSERT INTO tracker.studies (study_id, citation, strand) VALUES (%s,%s,'census')", (sid, f"v0.4 double test {n}"))
+            with conn("gene_coder") as c:
+                c.execute("INSERT INTO tracker.claims (claim_id, study_id, main_claim, claim_type) VALUES (%s,%s,'v0.4 double claim','Cause-effect')", (cid, sid))
+            q("gene_lead", "INSERT INTO tracker.assignments (claim_id, coder_id) VALUES (%s,1),(%s,2)", (cid, cid))
+            out = []
+            for user, ans, fin, s1, sup in (("gene_coder", g_ans, g_fin, g_s1, g_sup), ("adam_coder", a_ans, a_fin, a_s1, a_sup)):
+                setpv(V4)
+                try:
+                    coding = q(user, "INSERT INTO tracker.codings (claim_id, cer_summary, cer_summary_reason, evidence_tier, has_qualitative_data, supplement_seen, supportable_claim, supportable_claim_type, coder_claim_type) "
+                               "VALUES (%s,%s,%s,'Strong',false,true,%s,%s,%s) RETURNING coding_id",
+                               (cid, s1, WHY if s1 in ("PN", "N") else None, sup, "Correlation" if sup else None, "Correlation" if (n == 5 and user == "adam_coder") else CE))[0][0]
+                finally:
+                    setpv(PV)
+                a = {"E8c": "NA", "R1b": "NA"}; a.update(ans or {})
+                with conn(user) as c:
+                    for code in Q4:
+                        c.execute("INSERT INTO tracker.answers (coding_id, question_code, answer) VALUES (%s,%s,%s)", (coding, code, a.get(code, "Y")))
+                    for el in ELS:
+                        ev = (fin or {}).get(el, S)
+                        c.execute("INSERT INTO tracker.element_evaluations (coding_id, element, final_evaluation, rationale, own_evaluation) VALUES (%s,%s,%s,%s,%s)",
+                                  (coding, el, ev, f"Rationale for {el}.", ev))
+                if g_flag and user == "gene_coder":
+                    q(user, "UPDATE tracker.codings SET reporting_error_note=%s, reporting_error_open_data=true WHERE coding_id=%s", (g_flag, coding))
+                q(user, "SELECT tracker.submit_coding(%s)", (coding,))
+                out.append(coding)
+            return cid
+
+        def out4(user, cid):
+            return q(user, "SELECT pending, claim_rating::text, implications_rating::text, falls_short, needs_supportable_claim, coders_supportable_claim FROM tracker.claim_outcome_v04(%s)", (cid,))[0]
+
+        # Coders agree on everything; Implications fail for both
+        e1 = double4(1, U("I2", "I3", "I4", "I5", a="PN"), {"Implications": NS}, U("I2", "I3", "I4", "I5", a="PN"), {"Implications": NS})
+        o = out4("gene_coder", e1)
+        check("D17 agreed codings give Claim Supported and Implications Overstated with nothing pending", o[:5] == (None, S, "Overstated", None, False), str(o))
+        expect_error("D17 the earlier finalize function refuses a v0.4 Claim", "gene_coder", "SELECT tracker.finalize_claim(%s)", (e1,), "finalize_claim_v04")
+        expect_error("D17 a supportable claim is refused when the Claim rating is not Not supported", "gene_coder",
+                     "SELECT tracker.finalize_claim_v04(%s, 'A narrower claim', 'Correlation')", (e1,), "only when the Claim rating is Not supported")
+        expect_error("D17 an agent cannot finalize", "agent_claude", "SELECT tracker.finalize_claim_v04(%s)", (e1,), "permission denied")
+        r = q("gene_coder", "SELECT tracker.finalize_claim_v04(%s)", (e1,))[0][0]
+        rc = q("gene_lead", "SELECT rating::text, severity::text, claim_rating::text, implications_rating::text, supportable_claim FROM tracker.reconciled_claims WHERE claim_id=%s", (e1,))[0]
+        check("D17 finalized with two ratings and no single rating or severity", r == "Claim: Supported; Implications: Overstated" and rc == (None, None, S, "Overstated", None), f"{r} {rc}")
+
+        # Coders differ on Evidence: one says Not supported (E1 No), one Supported
+        e2 = double4(2, None, None, {"E1": "N"}, {"Evidence": NS}, g_s1="Y", a_s1="N", a_sup="AI use is associated with the outcome in this sample")
+        q("gene_coder", "SELECT tracker.open_reconciliation(%s)", (e2,))
+        o = out4("gene_coder", e2)
+        check("D18 a difference on Evidence and on S1 is pending before reconciliation", o[0] is not None and "Evidence" in o[0] and "CER summary" in o[0] and o[1] is None, str(o))
+        expect_error("D18 it cannot be finalized while pending", "gene_coder", "SELECT tracker.finalize_claim_v04(%s)", (e2,), "not reconciled")
+        for user, why in (("gene_coder", "The design cannot test a causal claim."), ("adam_coder", "Agree.")):
+            q(user, "SELECT tracker.agree_reconciliation(%s,'Evidence','Not supported',%s)", (e2, why))
+            q(user, "SELECT tracker.agree_item(%s,'CER summary','N',%s)", (e2, why))
+        o = out4("adam_coder", e2)
+        check("D18 reconciled to Evidence Not supported: Claim Not supported, Implications Not rated, one coder's supportable claim offered",
+              o == (None, NS, "Not rated", "Evidence (Not supported), CER summary (No)", True, "AI use is associated with the outcome in this sample"), str(o))
+        r = q("adam_coder", "SELECT tracker.finalize_claim_v04(%s)", (e2,))[0][0]
+        rc = q("gene_lead", "SELECT claim_rating::text, implications_rating::text, supportable_claim, supportable_claim_type::text FROM tracker.reconciled_claims WHERE claim_id=%s", (e2,))[0]
+        check("D18 finalized as Not supported / Not rated with the supportable claim and its type",
+              rc == (NS, "Not rated", "AI use is associated with the outcome in this sample", "Correlation"), f"{r} {rc}")
+
+        # Both coders say Not supported but wrote different supportable claims
+        e3 = double4(3, {"E1": "N"}, {"Evidence": NS}, {"E1": "N"}, {"Evidence": NS}, g_s1="N", a_s1="N", g_sup="Version one", a_sup="Version two")
+        o = out4("gene_coder", e3)
+        check("D19 different supportable claims: none is offered", o[1] == NS and o[4] is True and o[5] is None, str(o))
+        expect_error("D19 the agreed supportable claim must be given", "gene_coder", "SELECT tracker.finalize_claim_v04(%s)", (e3,), "give the agreed supportable claim")
+        expect_error("D19 it needs its type", "gene_coder", "SELECT tracker.finalize_claim_v04(%s, 'Agreed version')", (e3,), "give the agreed supportable claim")
+        q("gene_coder", "SELECT tracker.finalize_claim_v04(%s, 'Agreed version', 'Correlation')", (e3,))
+        check("D19 finalized with the agreed supportable claim",
+              q("gene_lead", "SELECT supportable_claim, supportable_claim_type::text FROM tracker.reconciled_claims WHERE claim_id=%s", (e3,)) == [("Agreed version", "Correlation")])
+
+        expect_error("D20 Overstated cannot be stored as a reconciled Claim rating", "postgres",
+                     "UPDATE tracker.reconciled_claims SET claim_rating = 'Overstated' WHERE claim_id = %s", (e1,), "invalid input value")
+        expect_error("D20 a v0.4 Claim cannot be given a single rating", "postgres",
+                     "UPDATE tracker.reconciled_claims SET rating = 'Supported', severity = 'No concerns' WHERE claim_id = %s", (e1,), "ratings_by_version")
+        expect_error("D20 a v0.3 Claim cannot be given the v0.4 ratings", "postgres",
+                     "UPDATE tracker.reconciled_claims SET claim_rating = 'Supported', implications_rating = 'Supported' WHERE claim_id = 'S0100-C01'", None, "ratings_by_version")
+        expect_error("D21 the v0.4 outcome function refuses a v0.3 Claim", "gene_lead", "SELECT * FROM tracker.claim_outcome_v04('S0100-C01')", None, "not CERIC-T v0.4")
+        check("D21 v0.3 reconciled Claims keep their single rating",
+              q("gene_admin", "SELECT count(*) FROM tracker.reconciled_claims WHERE protocol_version = %s AND (rating IS NULL OR claim_rating IS NOT NULL)", (PV,))[0][0] == 0)
+
+
+        # D22-D24: the reporting-error flag
+        expect_error("D22 a flag needs both the note and whether data are open", "gene_coder",
+                     "UPDATE tracker.codings SET reporting_error_note='x' WHERE coding_id=%s", (d9b,), "reporting_error_complete")
+        expect_error("D22 an agent cannot write a flag", "agent_claude",
+                     "UPDATE tracker.codings SET reporting_error_note='x', reporting_error_open_data=true WHERE coding_id=%s", (d9b,), "")
+        e4 = double4(4, g_flag="Table 1 gives a lower mean for the group reported as higher.")
+        o = q("gene_coder", "SELECT pending, reporting_error_flagged FROM tracker.claim_outcome_v04(%s)", (e4,))[0]
+        check("D23 a coder's flag is carried to the Claim's outcome", o == (None, True), str(o))
+        expect_error("D23 finalizing needs the agreed note when a coder flagged an error", "gene_coder", "SELECT tracker.finalize_claim_v04(%s)", (e4,), "flagged a suspected reporting error")
+        expect_error("D23 the agreed note needs the open-data answer", "gene_coder",
+                     "SELECT tracker.finalize_claim_v04(%s, NULL, NULL, NULL, 'Table 1 and the text disagree on direction.')", (e4,), "openly available")
+        q("gene_coder", "SELECT tracker.finalize_claim_v04(%s, NULL, NULL, NULL, 'Table 1 and the text disagree on direction.', true)", (e4,))
+        check("D24 the agreed flag is stored with the reconciled Claim and leaves the ratings as coded",
+              q("gene_lead", "SELECT claim_rating::text, implications_rating::text, reporting_error_note, reporting_error_open_data FROM tracker.reconciled_claims WHERE claim_id=%s", (e4,))
+              == [(S, S, "Table 1 and the text disagree on direction.", True)])
+    # D25-D31: correcting a submitted coding
+    if q("gene_admin", "SELECT count(*) FROM pg_proc WHERE proname = 'request_correction'")[0][0] == 1:
+        def codings_of(cid):
+            return dict(q("gene_admin", "SELECT coder_id, coding_id FROM tracker.codings WHERE claim_id=%s", (cid,)))
+        c5 = double4(5)
+        g5, a5 = codings_of(c5)[1], codings_of(c5)[2]
+        q("gene_coder", "UPDATE tracker.answers SET answer='PN' WHERE coding_id=%s AND question_code='E3'", (g5,))
+        check("D25 a submitted v0.4 coding is locked: a coder's change to an answer has no effect",
+              q("gene_coder", "SELECT answer::text FROM tracker.answers WHERE coding_id=%s AND question_code='E3'", (g5,)) == [("Y",)])
+        expect_error("D25 the owner cannot change a submitted answer either", "postgres",
+                     "UPDATE tracker.answers SET answer='PN' WHERE coding_id=%s AND question_code='E3'", (g5,), "submitted and locked")
+        expect_error("D25 another coder cannot ask for a correction to it", "adam_coder", "SELECT tracker.request_correction(%s,'reason')", (g5,), "Only the coder")
+        expect_error("D25 an agent cannot ask", "agent_claude", "SELECT tracker.request_correction(%s,'reason')", (g5,), "permission denied")
+        expect_error("D25 a reason is required", "gene_coder", "SELECT tracker.request_correction(%s,'  ')", (g5,), "reason is required")
+        expect_error("D25 a v0.3 coding cannot be corrected", "gene_coder", "SELECT tracker.request_correction(%s,'reason')", (coding_ids[SCEN[0][0]],), "v0.4 codings only")
+        k5 = q("gene_coder", "SELECT tracker.request_correction(%s,'Answers for Claim 1 were entered under this Claim.')", (g5,))[0][0]
+        expect_error("D26 only one open request per coding", "gene_coder", "SELECT tracker.request_correction(%s,'again')", (g5,), "one_open_correction")
+        expect_error("D26 the coder cannot approve their own request, as coder", "gene_coder", "SELECT tracker.decide_correction(%s,true,'ok')", (k5,), "your own coding")
+        expect_error("D26 the coder cannot approve their own request, as lead", "gene_lead", "SELECT tracker.decide_correction(%s,true,'ok')", (k5,), "your own coding")
+        expect_error("D26 an agent cannot approve", "agent_claude", "SELECT tracker.decide_correction(%s,true,'ok')", (k5,), "permission denied")
+        expect_error("D26 a coder not assigned to the Claim cannot approve", "third_tiebreak", "SELECT tracker.decide_correction(%s,true,'ok')", (k5,), "")
+        expect_error("D26 the request does not let the coder reopen the coding", "gene_coder", "UPDATE tracker.codings SET status='draft' WHERE coding_id=%s", (g5,), "permission denied")
+        expect_error("D26 a request that is not approved does not unlock the coding, even for the owner", "postgres",
+                     "UPDATE tracker.codings SET status='draft' WHERE coding_id=%s", (g5,), "submitted and locked")
+        expect_error("D26 no one can read the corrections table directly", "adam_coder", "SELECT * FROM tracker.coding_corrections", None, "permission denied")
+        seen = q("adam_coder", "SELECT reason, status, other_coding_submitted FROM tracker.corrections_list(%s)", (c5,))
+        check("D27 the other coder sees the request and its reason", seen == [("Answers for Claim 1 were entered under this Claim.", "requested", True)], str(seen))
+        expect_error("D27 an approval needs a reason", "adam_coder", "SELECT tracker.decide_correction(%s,true,'')", (k5,), "reason is required")
+        r = q("adam_coder", "SELECT tracker.decide_correction(%s,true,'Entry mistake; no change of evaluation is involved.')", (k5,))[0][0]
+        st = q("gene_coder", "SELECT status, final_claim_rating::text FROM tracker.codings WHERE coding_id=%s", (g5,))[0]
+        check("D27 the other coder approves and the coding reopens as a draft without its ratings", r == "approved" and st == ("draft", None), f"{r} {st}")
+        check("D27 the other coder can no longer see the reopened coding",
+              q("adam_coder", "SELECT count(*) FROM tracker.codings WHERE coding_id=%s", (g5,))[0][0] == 0)
+        orig = q("postgres", "SELECT original->'coding'->>'status', jsonb_array_length(original->'answers'), jsonb_array_length(original->'element_evaluations'), "
+                 "(SELECT a->>'answer' FROM jsonb_array_elements(original->'answers') a WHERE a->>'question_code'='E3') FROM tracker.coding_corrections WHERE correction_id=%s", (k5,))[0]
+        check("D28 the original coding, 41 answers and 5 evaluations are kept", orig == ("submitted", 41, 5, "Y"), str(orig))
+        q("gene_coder", "UPDATE tracker.answers SET answer='PN' WHERE coding_id=%s AND question_code='E3'", (g5,))
+        q("gene_coder", "UPDATE tracker.element_evaluations SET final_evaluation='Some concerns' WHERE coding_id=%s AND element='Evidence'", (g5,))
+        q("gene_coder", "UPDATE tracker.codings SET cer_summary='PY' WHERE coding_id=%s", (g5,))
+        expect_error("D28 a reopened coding cannot be deleted", "gene_coder", "DELETE FROM tracker.codings WHERE coding_id=%s", (g5,), "correction on record")
+        q("gene_coder", "SELECT tracker.submit_coding(%s)", (g5,))
+        st = q("gene_coder", "SELECT status, final_claim_rating::text FROM tracker.codings WHERE coding_id=%s", (g5,))[0]
+        kk = q("gene_lead", "SELECT status, completed_at IS NOT NULL FROM tracker.corrections_list(%s)", (c5,))
+        check("D29 the corrected coding is resubmitted and the request is closed", st == ("submitted", "Supported with concerns") and kk == [("completed", True)], f"{st} {kk}")
+        expect_error("D29 once closed, the coding is locked again, even for the owner", "postgres", "UPDATE tracker.codings SET status='draft' WHERE coding_id=%s", (g5,), "submitted and locked")
+        check("D29 the original answer is still on record after the change",
+              q("postgres", "SELECT (SELECT a->>'answer' FROM jsonb_array_elements(original->'answers') a WHERE a->>'question_code'='E3') FROM tracker.coding_corrections WHERE correction_id=%s", (k5,)) == [("Y",)])
+        # Gene, as lead, approves Adam's; a refusal; and the cut-off at reconciliation
+        k6 = q("adam_coder", "SELECT tracker.request_correction(%s,'Wrong tier selected.')", (a5,))[0][0]
+        check("D30 the lead approves the other coder's request", q("gene_lead", "SELECT tracker.decide_correction(%s,true,'Entry mistake.')", (k6,))[0][0] == "approved")
+        q("adam_coder", "UPDATE tracker.codings SET evidence_tier='Moderate' WHERE coding_id=%s", (a5,))
+        q("adam_coder", "SELECT tracker.submit_coding(%s)", (a5,))
+        k7 = q("adam_coder", "SELECT tracker.request_correction(%s,'Second thoughts about the Evidence evaluation.')", (a5,))[0][0]
+        r = q("gene_coder", "SELECT tracker.decide_correction(%s,false,'This is a change of evaluation, not an entry mistake; it goes to reconciliation.')", (k7,))[0][0]
+        check("D30 a request can be refused, and the coding stays locked",
+              r == "refused" and q("adam_coder", "SELECT status FROM tracker.codings WHERE coding_id=%s", (a5,)) == [("submitted",)])
+        q("gene_coder", "SELECT tracker.open_reconciliation(%s)", (c5,))
+        expect_error("D31 no correction once reconciliation has started", "adam_coder", "SELECT tracker.request_correction(%s,'Too late.')", (a5,), "Reconciliation has started")
+        import subprocess
+        rp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agreement-report-v04.sql")
+        if os.path.exists(rp):
+            env = dict(os.environ, PGUSER=PREFIX + "gene_lead", PGPASSWORD=PW[PREFIX + "gene_lead"], PGDATABASE=DB)
+            out = subprocess.run(["psql", "-v", "ON_ERROR_STOP=1", "-f", rp], env=env, capture_output=True, text=True)
+            open("/tmp/agreement_v04.out", "w").write(out.stdout + out.stderr)
+            check("D32 the v0.4 agreement report runs for the lead without error", out.returncode == 0 and "Claim rating" in out.stdout, (out.stderr or out.stdout)[-400:])
+        # D33-D38: a note appended to a finalized rating
+        if q("gene_admin", "SELECT count(*) FROM pg_proc WHERE proname = 'add_rating_note'")[0][0] == 1:
+            before = q("gene_lead", "SELECT claim_rating::text, implications_rating::text FROM tracker.reconciled_claims WHERE claim_id=%s", (e1,))
+            n1 = q("adam_coder", "SELECT tracker.add_rating_note(%s, 'The authors published a correction to Table 2 on 2027-01-10.')", (e1,))[0][0]
+            n2 = q("gene_coder", "SELECT tracker.add_rating_note(%s, 'Second note, from the other coder.')", (e1,))[0][0]
+            check("D33 either coder of the Claim adds a note, without the other's agreement", n1 and n2 and n2 > n1, f"{n1} {n2}")
+            check("D33 the rating is unchanged by a note",
+                  q("gene_lead", "SELECT claim_rating::text, implications_rating::text FROM tracker.reconciled_claims WHERE claim_id=%s", (e1,)) == before)
+            expect_error("D34 an agent cannot add a note", "agent_claude", "SELECT tracker.add_rating_note(%s, 'x')", (e1,), "permission denied")
+            expect_error("D34 the lead sign-in cannot add a note", "gene_lead", "SELECT tracker.add_rating_note(%s, 'x')", (e1,), "permission denied")
+            expect_error("D34 a person who did not code the Claim cannot add a note", "third_tiebreak", "SELECT tracker.add_rating_note(%s, 'x')", (e1,), "permission denied")
+            expect_error("D35 a note needs text", "gene_coder", "SELECT tracker.add_rating_note(%s, '  ')", (e1,), "empty")
+            expect_error("D35 no note on a Claim that is not finalized", "gene_coder", "SELECT tracker.add_rating_note(%s, 'x')", (c5,), "not finalized")
+            expect_error("D35 no note on a v0.3 rating", "gene_coder", "SELECT tracker.add_rating_note('S0100-C01', 'x')", None, "v0.4 ratings only")
+            expect_error("D36 a note cannot be edited, even by the administrator", "gene_admin", "UPDATE tracker.rating_notes SET note='changed' WHERE note_id=%s", (n1,), "added only")
+            expect_error("D36 a note cannot be removed, even by the database owner", "postgres", "DELETE FROM tracker.rating_notes WHERE note_id=%s", (n1,), "added only")
+            expect_error("D36 a coder cannot write the table directly", "gene_coder", "INSERT INTO tracker.rating_notes (claim_id, added_by, note) VALUES (%s, 1, 'x')", (e1,), "permission denied")
+            lst = q("gene_coder", "SELECT added_by_name, note FROM tracker.rating_notes_list(%s)", (e1,))
+            check("D37 coders of the Claim and the lead can read its notes, in order", [r[0] for r in lst] == ["Adam Burgasser", "Gene Bjorn"]
+                  and len(q("gene_lead", "SELECT 1 FROM tracker.rating_notes_list(%s)", (e1,))) == 2, str(lst))
+            expect_error("D37 an agent cannot read notes", "agent_claude", "SELECT * FROM tracker.rating_notes_list(%s)", (e1,), "permission denied")
+            check("D38 notes are not public while ratings are switched off", q("wp_publisher", "SELECT count(*) FROM tracker.public_rating_notes")[0][0] == 0)
+            check("D38 each note is in the change log", q("gene_admin", "SELECT count(*) FROM admin.change_log WHERE table_name = 'rating_notes'")[0][0] == 2)
+        check("D31 every request, decision and change is in the change log",
+              q("gene_admin", "SELECT count(*) FROM admin.change_log WHERE table_name = 'coding_corrections'")[0][0] >= 7)
 
 
 # ----------------------------------------------------------------------

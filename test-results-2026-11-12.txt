@@ -1,0 +1,292 @@
+PASS A0 42 questions loaded for v0.3
+PASS A0 new codings are recorded under v0.3
+PASS V01 all favorable: Supported, No concerns; falls short at None
+PASS V02 C4 with S1 No: narrower Claim supported: Overstated, Major concerns; falls short at Claim (Not supported), CER summary (No)
+PASS V03 C4 with S1 Probably yes: Claim Not supported: Overstated, Major concerns; falls short at Claim (Not supported)
+PASS V04 E1 alone: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V05 E2 alone: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (Probably no)
+PASS V06 E7 No information is neutral: Supported, No concerns; falls short at None
+PASS V07 E7 Probably no: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V08 E9 alone: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V09 E6 for a Correlation Claim: Supported with concerns, Minor concerns; falls short at Evidence (Some concerns)
+PASS V10 E6 for a Cause-effect Claim: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V11 E10 for a Cause-effect Claim: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V12 E10 for a Correlation Claim: Supported with concerns, Minor concerns; falls short at Evidence (Some concerns)
+PASS V13 E9, E10, R6 Not applicable for a Description Claim: Supported, No concerns; falls short at None
+PASS V14 Evidence 4 of 10: below half: Supported with concerns, Minor concerns; falls short at Evidence (Some concerns)
+PASS V15 Evidence 5 of 10: half rule: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V16 Claim 3 of 7: below half: Supported with concerns, Minor concerns; falls short at Claim (Some concerns)
+PASS V17 Claim 4 of 7: half rule: Overstated, Major concerns; falls short at Claim (Not supported)
+PASS V18 C3 with the opposite-direction mark: Overstated, Major concerns; falls short at Claim (Not supported)
+PASS V19 C7 is an ordinary question: Supported with concerns, Minor concerns; falls short at Claim (Some concerns)
+PASS V20 R3 for a Correlation Claim: Supported with concerns, Minor concerns; falls short at Reasoning (Some concerns)
+PASS V21 R3 for a Cause-effect Claim: Not supported, Major concerns; falls short at Reasoning (Not supported), CER summary (No)
+PASS V22 R6 No information is neutral: Supported, No concerns; falls short at None
+PASS V23 R6 No: Not supported, Major concerns; falls short at Reasoning (Not supported), CER summary (No)
+PASS V24 Reasoning 3 of 8: below half: Supported with concerns, Minor concerns; falls short at Reasoning (Some concerns)
+PASS V25 Reasoning 4 of 8: half rule: Not supported, Major concerns; falls short at Reasoning (Not supported), CER summary (No)
+PASS V26 R7 with the fallacy mark: Not supported, Major concerns; falls short at Reasoning (Not supported), CER summary (No)
+PASS V27 I6 alone; coder overrides Implications to Not supported: Supported with concerns, Minor concerns; falls short at Implications (Not supported)
+PASS V28 I6 with I9: Supported with concerns, Minor concerns; falls short at Implications (Not supported)
+PASS V29 I1 No information: Supported with concerns, Minor concerns; falls short at Implications (Some concerns)
+PASS V30 Implications 3 of I2-I9 plus I1: I1 is not counted: Supported with concerns, Minor concerns; falls short at Implications (Some concerns)
+PASS V31 Implications 4 of I2-I9: half rule: Supported with concerns, Minor concerns; falls short at Implications (Not supported)
+PASS V32 I7 with the no-limitations mark: Supported with concerns, Minor concerns; falls short at Implications (Not supported)
+PASS V33 Co1 alone: context flag: Supported with concerns, Minor concerns; falls short at Context (Not supported)
+PASS V34 Co3 Probably no: Supported with concerns, Minor concerns; falls short at Context (Not supported)
+PASS V35 Co3, Co4, Co7 No information are neutral: Supported, No concerns; falls short at None
+PASS V36 Co7 Not applicable (preprint), Co2 Not applicable: Supported, No concerns; falls short at None
+PASS V37 Co7 No (predatory venue): Supported with concerns, Minor concerns; falls short at Context (Some concerns)
+PASS V38 Context 3 of 8: below half: Supported with concerns, Minor concerns; falls short at Context (Some concerns)
+PASS V39 Context 4 of 8: half rule: Supported with concerns, Minor concerns; falls short at Context (Not supported)
+PASS V40 S1 No with every element Supported: Overstated, Major concerns; falls short at CER summary (No)
+PASS V41 S1 Probably no with an Implications problem: Overstated, Major concerns; falls short at CER summary (Probably no), Implications (Not supported)
+PASS V42 E1 No information only: not enough reported: Cannot be evaluated, None; falls short at Evidence (not enough reported), CER summary (No)
+PASS V43 Evidence half rule through No information only: Cannot be evaluated, None; falls short at Evidence (not enough reported), CER summary (Probably no)
+PASS V44 E1 No information with E3 No: the Evidence fails: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V45 R3 No information only for a Cause-effect Claim: Cannot be evaluated, None; falls short at Reasoning (not enough reported), CER summary (No)
+PASS V46 Evidence unreported but Reasoning fails: Not supported, Major concerns; falls short at Evidence (not enough reported), Reasoning (Not supported), CER summary (No)
+PASS V47 Reasoning half rule through No information only: Cannot be evaluated, None; falls short at Reasoning (not enough reported), CER summary (Probably no)
+PASS V48 Coder overrides Evidence to Not supported with every answer favorable: Not supported, Major concerns; falls short at Evidence (Not supported), CER summary (No)
+PASS V27 submit refused without override note
+PASS No Overstated type is asked for under v0.3
+PASS An Overstated type cannot be recorded under v0.3
+PASS Falls-short line names elements in CERIC order with the CER summary after Reasoning
+PASS Rule order: a failed element outranks an unreported one; an unreported one outranks the CER summary
+PASS All 48 scenarios submit with the expected rating
+PASS G1 agent cannot write an answer
+PASS G1 agent cannot change an evaluation
+PASS G1 agent cannot create a coding
+PASS G1 agent cannot write a rating
+PASS G1 agent cannot finalize a claim
+PASS G1 lead sign-in cannot write answers
+PASS G3 coder's edit of a submitted coding changes nothing
+PASS G3 even the administrator cannot edit a submitted answer
+PASS G3 even the administrator cannot edit a submitted evaluation
+PASS G3 coder cannot set status directly
+PASS G3 claim wording fixed after submission
+PASS G6 NA refused on C1
+PASS Coder not assigned cannot code the claim
+PASS G5 submission refused with a missing rationale
+PASS G2 Gene (coder) cannot see Adam's draft answers
+PASS G2 Gene (lead sign-in) cannot see Adam's draft
+PASS G2 rule functions refuse another coder's draft
+PASS G2 agent cannot see unsubmitted codings
+PASS D1 after Adam submits, Gene's lead sign-in still cannot see it while Gene's own coding is a draft
+PASS G2 after Adam submits, Gene (coder) still cannot see it
+PASS G2 agent can see Adam's submitted coding
+PASS G2 Adam cannot see Gene's draft
+PASS G2 once both submit, each sees the other
+PASS Admin sign-in sees everything (maintenance only, logged)
+PASS Reconciliation agenda lists the two differing elements
+PASS D2 Gene (lead) cannot decide a claim she coded
+PASS D2 unassigned tie-breaker cannot decide
+PASS D2 a coder cannot be made tie-breaker
+PASS Two coders agree an element
+PASS Finalized rating follows the reconciled evaluations
+PASS Unknown vulnerable-student code refused
+PASS G7 nothing public while the release is a draft
+PASS G7 agent cannot approve a release
+PASS G7 publisher cannot read coding tables
+PASS G7 publisher cannot call rule functions
+PASS G7 approved release appears in the census
+PASS Unverified who-was-studied pre-fill stays private
+PASS Verified who-was-studied is published with its rating
+PASS Release items locked after approval
+PASS G8 ratings hidden while ratings_public is off
+PASS G8 agent cannot turn ratings on
+PASS G8 coder cannot turn ratings on
+PASS G8 ratings appear once the lead turns them on
+PASS Publisher records the WordPress revision
+PASS Agent cannot close a flag
+PASS Closing a flag needs a note
+PASS A human closes a flag with a note
+PASS D3 agent cannot pre-fill a human-only item
+PASS D3 agent cannot change a human answer
+PASS G11 audit refused with an unconfirmed agent pre-fill
+PASS Audit produces a flags profile by domain, no rating
+PASS Agent cannot confirm a decision
+PASS Lead confirms an agent's draft decision
+PASS Double-coding draw is logged with its seed
+PASS Reliability runs on independent submissions
+PASS Administrator session logged
+PASS Funding: a funder needs a name
+PASS Agents edit the funding area
+PASS Coders cannot reach the funding area
+PASS G9 change log cannot be edited (lead)
+PASS G9 change log cannot be edited (administrator)
+PASS G9 every change is logged with who made it
+PASS C1 submission needs the CER summary and the Evidence tier
+PASS C1 no rating is proposed until the CER summary is answered
+PASS C14 a coder cannot set their own rating under v0.3
+PASS C14 a coder cannot set their own severity under v0.3
+PASS C2 S1 cannot be Yes or Probably yes when Evidence is Not supported
+PASS C2 S1 Yes or Probably yes with a supportable claim needs a note
+PASS C2 submission refused while S1 contradicts the Evidence evaluation
+PASS C3 S1 No needs a one-sentence reason
+PASS C3 with the reason written, nothing is outstanding
+PASS C4 S1 accepts only Y, PY, PN, N
+PASS C4 Evidence tier accepts only the five values
+PASS C4 fifth tier value is accepted
+PASS C5 agent cannot answer the CER summary
+PASS C5 agent cannot set the Evidence tier
+PASS C5 lead sign-in cannot answer the CER summary
+PASS C5 S1 and tier are locked after submission
+PASS C6 Not applicable is accepted on exactly C2, E9, E10, R6, I6, I8, Co2, Co3, Co7
+PASS C6 a v0.3 coding cannot answer a v0.2 question code
+PASS C6 every answer carries its coding's protocol version
+PASS C7 every question set is kept (v0.2, v0.3, and v0.4 once its file is applied)
+PASS C7 v0.3 is still the current protocol
+PASS C7 a v0.2 coding keeps the v0.2 rules (three unfavorable Claim answers; no CER summary)
+PASS C7 a v0.2 coding cannot answer a v0.3-only question
+PASS G10 every coding records its protocol version
+PASS C8 S1 and tier disagreements go on the reconciliation agenda
+PASS C8 before everything is settled, the outcome lists what is pending and gives no rating
+PASS C8 agent cannot ask for a claim's outcome
+PASS C8 a coder of another claim cannot ask for this claim's outcome
+PASS C8 a claim cannot be finalized while S1 is unreconciled
+PASS C8 agent cannot agree an item
+PASS C8 an item needs a valid value
+PASS C8 an item needs a reason
+PASS C8 two coders agree the CER summary
+PASS C8 the tier must be settled before finalizing
+PASS D2 Gene (lead) cannot decide an item on a claim she coded
+PASS D2 unassigned tie-breaker cannot decide an item
+PASS C8 once settled, the outcome is shown before finalizing
+PASS C8 looking at the outcome records nothing
+PASS C8 final rating follows the agreed CER summary; the agreed tier and the falls-short line are recorded
+PASS C9 Yes versus Probably yes is not a disagreement; the element difference is
+PASS C9 the less certain of two favorable answers is kept
+PASS C9 the old name 'Partially supported' is gone
+PASS C9b an agreed Evidence evaluation resting only on No information gives Cannot be evaluated, with no severity
+PASS C9b every other rating must carry a severity
+PASS C13 the word 'verdict' appears nowhere in the database's names, rules, comments, settings or questions
+PASS C14 every submitted v0.3 coding carries the derived rating and severity
+PASS C15 a person assigned to code a Claim cannot be named its tie-breaker, even before starting
+PASS C15 a Claim's tie-breaker cannot be assigned to code it
+PASS C10 agreement on S1 and tier is reported
+PASS C10 coders cannot run the agreement report
+PASS C10 reconciliation items are logged
+PASS C11 a predatory venue needs its basis
+PASS C11 agent cannot confirm publication status
+PASS C11 an unconfirmed publication status stays private
+PASS C11 a confirmed publication status is published
+PASS C12 the published rating carries the CER summary and the Evidence tier
+PASS C12 publisher cannot read reconciliation items
+PASS C16 a design value needs its quoted passage
+PASS C16 a coder cannot create a Dependence record
+PASS C17 a coder with coding still to submit on the study cannot see its record
+PASS C17 a coder with nothing left to submit on the study can see it
+PASS C18 a coder with coding still to submit cannot confirm
+PASS C18 an agent cannot confirm
+PASS C18 a coder cannot set the confirmation directly
+PASS C19 a coder confirms a record
+PASS C20 an agent cannot change a confirmed record
+PASS C20 a person's change clears the confirmation
+PASS C21 no one can delete a record
+PASS C21 the publisher cannot read the working table
+PASS C22 an unconfirmed record is not published
+PASS C22 a confirmed record of a released study is published
+PASS C22 the rating is unchanged by the Dependence record
+PASS D1 41 questions loaded for v0.4
+PASS D1 v0.3 is the current protocol again after a v0.4 coding is opened
+PASS D2 every answer favorable: Claim Supported, Implications Supported, nothing to fix
+PASS D2 a submitted v0.4 coding carries two ratings and no single rating or severity
+PASS D3 E1 answered No: Claim Not supported, Implications Not rated, supportable claim asked for
+PASS D3 it cannot be submitted without the supportable claim
+PASS D3 submitted as Not supported / Not rated
+PASS D3 the route to Not supported is recorded as a trigger
+PASS D4 E1 answered Probably no is one ordinary concern: Claim Supported with concerns
+PASS D5 Implications Not supported with a sound argument: Claim Supported, Implications Overstated, no supportable claim
+PASS D5 the route is recorded as the half rule
+PASS D6 E1 answered No information: Cannot be evaluated, Implications Not rated, no supportable claim wanted
+PASS D7 S1 cannot be Yes when the Claim element is Not supported
+PASS D8 the screener must be answered
+PASS D8 without qualitative data E8c and R1b must be Not applicable
+PASS D8 with qualitative data E8c and R1b are answered
+PASS D8 an unfavorable E8c is counted once: R1b must be Not applicable
+PASS D9 unreported uncertainties are counted once: R1 must be Not applicable
+PASS D9 with R1 Not applicable the coding is complete
+PASS D9 R1 cannot be Not applicable otherwise
+PASS D10 No information is not offered on I8
+PASS D11 a coder cannot set the Claim rating
+PASS D11 Overstated is refused as a Claim rating
+PASS D12 the coder's own evaluation is required for each element
+PASS D12 a recorded own evaluation cannot be changed
+PASS D13 an agent cannot write a coder's own evaluation
+PASS D13 an agent cannot answer the screener
+PASS D13 the coder's reading of the claim type is required
+PASS D14 a supportable claim is refused unless the Claim rating is Not supported
+PASS D15 E10 and R3 answered No are ordinary concerns for a Cause-effect Claim
+PASS D16 Claim element Not supported with sound Evidence and Reasoning: Claim rating Not supported, never Overstated
+PASS D16 a v0.3 coding is refused by the v0.4 result function
+PASS D16 v0.3 codings keep their single rating
+PASS D17 agreed codings give Claim Supported and Implications Overstated with nothing pending
+PASS D17 the earlier finalize function refuses a v0.4 Claim
+PASS D17 a supportable claim is refused when the Claim rating is not Not supported
+PASS D17 an agent cannot finalize
+PASS D17 finalized with two ratings and no single rating or severity
+PASS D18 a difference on Evidence and on S1 is pending before reconciliation
+PASS D18 it cannot be finalized while pending
+PASS D18 reconciled to Evidence Not supported: Claim Not supported, Implications Not rated, one coder's supportable claim offered
+PASS D18 finalized as Not supported / Not rated with the supportable claim and its type
+PASS D19 different supportable claims: none is offered
+PASS D19 the agreed supportable claim must be given
+PASS D19 it needs its type
+PASS D19 finalized with the agreed supportable claim
+PASS D20 Overstated cannot be stored as a reconciled Claim rating
+PASS D20 a v0.4 Claim cannot be given a single rating
+PASS D20 a v0.3 Claim cannot be given the v0.4 ratings
+PASS D21 the v0.4 outcome function refuses a v0.3 Claim
+PASS D21 v0.3 reconciled Claims keep their single rating
+PASS D22 a flag needs both the note and whether data are open
+PASS D22 an agent cannot write a flag
+PASS D23 a coder's flag is carried to the Claim's outcome
+PASS D23 finalizing needs the agreed note when a coder flagged an error
+PASS D23 the agreed note needs the open-data answer
+PASS D24 the agreed flag is stored with the reconciled Claim and leaves the ratings as coded
+PASS D25 a submitted v0.4 coding is locked: a coder's change to an answer has no effect
+PASS D25 the owner cannot change a submitted answer either
+PASS D25 another coder cannot ask for a correction to it
+PASS D25 an agent cannot ask
+PASS D25 a reason is required
+PASS D25 a v0.3 coding cannot be corrected
+PASS D26 only one open request per coding
+PASS D26 the coder cannot approve their own request, as coder
+PASS D26 the coder cannot approve their own request, as lead
+PASS D26 an agent cannot approve
+PASS D26 a coder not assigned to the Claim cannot approve
+PASS D26 the request does not let the coder reopen the coding
+PASS D26 a request that is not approved does not unlock the coding, even for the owner
+PASS D26 no one can read the corrections table directly
+PASS D27 the other coder sees the request and its reason
+PASS D27 an approval needs a reason
+PASS D27 the other coder approves and the coding reopens as a draft without its ratings
+PASS D27 the other coder can no longer see the reopened coding
+PASS D28 the original coding, 41 answers and 5 evaluations are kept
+PASS D28 a reopened coding cannot be deleted
+PASS D29 the corrected coding is resubmitted and the request is closed
+PASS D29 once closed, the coding is locked again, even for the owner
+PASS D29 the original answer is still on record after the change
+PASS D30 the lead approves the other coder's request
+PASS D30 a request can be refused, and the coding stays locked
+PASS D31 no correction once reconciliation has started
+PASS D32 the v0.4 agreement report runs for the lead without error
+PASS D33 either coder of the Claim adds a note, without the other's agreement
+PASS D33 the rating is unchanged by a note
+PASS D34 an agent cannot add a note
+PASS D34 the lead sign-in cannot add a note
+PASS D34 a person who did not code the Claim cannot add a note
+PASS D35 a note needs text
+PASS D35 no note on a Claim that is not finalized
+PASS D35 no note on a v0.3 rating
+PASS D36 a note cannot be edited, even by the administrator
+PASS D36 a note cannot be removed, even by the database owner
+PASS D36 a coder cannot write the table directly
+PASS D37 coders of the Claim and the lead can read its notes, in order
+PASS D37 an agent cannot read notes
+PASS D38 notes are not public while ratings are switched off
+PASS D38 each note is in the change log
+PASS D31 every request, decision and change is in the change log
+
+290/290 passed

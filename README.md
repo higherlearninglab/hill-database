@@ -10,7 +10,7 @@ The database enforces these rules itself, so they do not depend on any person or
 
 1. **Appraisal is human.** AI agents can prepare packets of quoted passages, pre-fill factual fields and raise flags. They cannot write a CERIC-T signalling answer, an element evaluation, a rationale, a rating, a severity, the CER summary answer or the Evidence tier.
 2. **Blind double-coding.** Each coder sees only their own answers on a claim until both coders have submitted.
-3. **Submitted codings are locked.** Later changes go through reconciliation, with a recorded reason.
+3. **Submitted codings are locked.** Later changes go through reconciliation, with a recorded reason. The one exception, under CERIC-T v0.4, is a correction of an entry mistake (see 18).
 4. **Every departure from the rules is explained.** If a coder's evaluation of an element differs from the one the rules propose, an override note is required.
 5. **No incomplete records.** A coding cannot be submitted without every answer, five evaluations and five rationales, the CER summary answer and the Evidence tier.
 6. **"Not applicable" only where the protocol allows it.**
@@ -20,11 +20,36 @@ The database enforces these rules itself, so they do not depend on any person or
 10. **Every coding records the protocol version it was coded under.** Questions are stored per version, so a coding stays tied to the questions it used.
 11. **Agent pre-fills in synthesis audits must be confirmed by a human** before the audit can be submitted.
 12. **No one settles a disagreement on their own coding.**
-13. **Ratings are derived, not chosen.** Under CERIC-T v0.3 the database derives each rating and its severity from the element evaluations, the CER summary and the answers. A coder cannot set or override them.
+13. **Ratings are derived, not chosen.** From CERIC-T v0.3 on, the database derives each rating from the element evaluations, the CER summary and the answers. A coder cannot set or override it.
 14. **A tie-breaker never codes the Claim.** No one assigned to code a Claim can be named its tie-breaker, and a Claim's tie-breaker cannot be assigned to code it.
 15. **The Dependence item is confirmed by a person and never affects a rating.** An agent may pre-fill it with quoted passages. A coder or the lead confirms it, and a person who still has coding to submit on the study cannot see or confirm it. An agent cannot confirm it or change a confirmed record.
+16. **Two ratings, kept apart (CERIC-T v0.4).** Each Claim has a Claim rating and an Implications rating, stored in separate fields with separate lists of allowed values. "Overstated" is an Implications rating only; the database rejects it as a Claim rating.
+17. **The coder's own evaluation comes first (CERIC-T v0.4).** A coder records their own evaluation of each element before the rule's result is shown. Once recorded it cannot be changed, except through an approved correction.
+18. **Corrections are decided by someone else (CERIC-T v0.4).** A coder may ask, with a reason, to correct an entry mistake in a submitted coding. Another person decides: the lead or a coder assigned to the same Claim, never the coder who asked. It is possible only before reconciliation has started. The coding as it stood is kept, and the request, the decision and the changes are logged. Agents cannot ask, decide or see.
+19. **A finalized rating can be annotated, never altered (CERIC-T v0.4).** Either coder of a Claim may add a note to its finalized rating. Notes are added only: no sign-in, including the database owner, can edit or remove one, and a note never changes a rating.
 
-## The rating scale (CERIC-T v0.3, draft)
+## The ratings (CERIC-T v0.4, draft; current from 2026-11-12)
+
+Every element is evaluated against the Claim as the authors state it.
+
+| Claim rating | Rule (applied in order; the first that matches governs) |
+|---|---|
+| Not supported | Evidence or Reasoning is Not supported, with a question in that element answered No or Probably no |
+| Cannot be evaluated | Evidence or Reasoning is Not supported only through No information answers |
+| Not supported | The Claim element is Not supported, or the CER summary is answered Probably no or No |
+| Supported with concerns | Context is Not supported, or Claim, Evidence, Reasoning or Context has Some concerns |
+| Supported | Claim, Evidence, Reasoning and Context are all Supported |
+
+| Implications rating | When |
+|---|---|
+| Not rated | The Claim rating is Not supported or Cannot be evaluated |
+| Supported | The Implications element is Supported |
+| Some concerns | The Implications element has Some concerns |
+| Overstated | The Implications element is Not supported |
+
+The Implications element is not an input to the Claim rating. Severity is not used under v0.4. When the Claim rating is Not supported, the coders record the claim the study can support, with its type; nothing is evaluated against it. A coder may flag a suspected reporting error, with whether the authors' data are openly available; the flag is agreed at finalizing and leaves the ratings as coded.
+
+## The rating scale (CERIC-T v0.3, draft; calibration round one)
 
 | Rating | Meaning |
 |---|---|
@@ -44,7 +69,7 @@ Applied in order; the first rule that matches governs:
 
 Every rating below Supported carries a derived line naming where the argument falls short. Cannot be evaluated carries no severity.
 
-CERIC-T v0.3 is a draft. A first calibration round was coded under it in November 2026, and a revised version (v0.4) is in preparation. Scripts are added here only after they are live in the database and their tests pass, so v0.4 is not in this repository yet.
+CERIC-T v0.3 is a draft. A first calibration round was coded under it in November 2026; those records stay under v0.3 and are not re-rated. Scripts are added here only after they are live in the database and their tests pass.
 
 ## The Dependence item
 
@@ -52,7 +77,7 @@ Reported beside the rating for any study of a student-facing learning support. I
 
 ## Files
 
-Apply the six scripts in this order.
+Apply the twelve scripts in this order.
 
 | File | What it is |
 |---|---|
@@ -62,8 +87,16 @@ Apply the six scripts in this order.
 | `hill-db-no-rating-override.sql` | Under v0.3 a coder cannot set or override the rating or severity |
 | `hill-db-tiebreak-guard.sql` | A tie-breaker cannot be someone assigned to code the Claim |
 | `hill-db-dependence-item.sql` | The Dependence item: agent pre-fill, human confirmation, visibility rule and public view |
-| `run_tests_v03.py` | 190 automated tests of the database as it is now: 48 rule scenarios, and a test of every safeguard above, run by signing in as each role |
-| `test-results-2026-11-11.txt` | Results of those tests |
+| `hill-db-v04-ratings.sql` | CERIC-T v0.4: the two rating types and the functions that derive them |
+| `hill-db-v04-questions-algorithms.sql` | The v0.4 question set (41 questions by code), the element rule, the route to Not supported, and the fields for the coder's own evaluation, the qualitative-data screener and the supplement |
+| `hill-db-v04-submit.sql` | Submitting a v0.4 coding with two ratings; the checks a coding must pass; the reporting-error flag |
+| `hill-db-v04-reconcile.sql` | Reconciling and finalizing a v0.4 Claim with two ratings; the public view |
+| `hill-db-v04-corrections.sql` | Correcting an entry mistake in a submitted coding, decided by another person |
+| `hill-db-v04-rating-notes.sql` | Notes appended to a finalized rating |
+| `run_tests_v03.py` | 290 automated tests of the database as it is now: rule scenarios for v0.3 and v0.4, every combination of element evaluations for the two ratings, and a test of every safeguard above, run by signing in as each role |
+| `test-results-2026-11-12.txt` | Results of those tests |
+| `test-results-2026-11-11.txt` | Results of the 190 tests as they stood before the v0.4 scripts |
+| `agreement-report-v04.sql`, `agreement-pairs-v04.sql`, `agreement-stats-v04.py` | The read-only agreement report for v0.4 codings: agreement and kappa per element and for both ratings, per-question statistics, the rule's result against each coder's own evaluation, and how often each rule fired; a script adds a bootstrap interval that resamples studies and a test of marginal homogeneity |
 | `test-results-2026-11-10.txt` | Results of the 172 tests as they stood before the last two scripts |
 | `agreement-report.sql` | A read-only report for the lead on agreement between two coders: percent agreement, Cohen's kappa with an interval, Gwet's AC2 and the override rate for each element, and agreement on the rating, the CER summary and the Evidence tier |
 | `run_tests.py`, `test-results-2026-11-09.txt` | The 145 tests of the first build alone, and their results |
@@ -84,6 +117,12 @@ psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-rating-scale.sql
 psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-no-rating-override.sql
 psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-tiebreak-guard.sql
 psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-dependence-item.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v04-ratings.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v04-questions-algorithms.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v04-submit.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v04-reconcile.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v04-corrections.sql
+psql -d hilltest -v ON_ERROR_STOP=1 -f hill-db-v04-rating-notes.sql
 PGDATABASE=hilltest HILL_TEST_ADMIN=<admin user> python3 run_tests_v03.py
 ```
 
@@ -93,7 +132,7 @@ The tests create temporary sign-ins prefixed `test_`, with random one-time passw
 
 ## Sources
 
-- CERIC-T protocol and decision rules, version 0.3 (draft), Higher Learning Lab, November 2026.
+- CERIC-T protocol and decision rules, versions 0.3 and 0.4 (drafts), Higher Learning Lab, November 2026.
 - Bjorn, G., & Burgasser, A. J. *How to Critically Read the Scientific Research Literature.* Cambridge University Press.
 - HiLL Synthesis Audit Checklist, version 0.1.
 - Evidence tiers adapted from the tiers of evidence in the Every Student Succeeds Act (ESSA).
