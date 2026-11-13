@@ -47,7 +47,7 @@ SELECT r.element, r.n_claims, round(100 * r.percent_agreement, 1) AS pct_agree, 
   FROM tracker.reliability(:'pv') r LEFT JOIN m ON m.element = r.element::text::tracker.element LEFT JOIN pe ON pe.element = m.element
  ORDER BY r.element;
 \echo
-\echo == V2. Use of each evaluation, by coder (percent of that coder's Claims) ==
+\echo '== V2. Use of each evaluation, by coder (percent of that coder''s Claims) =='
 SELECT element, coder, count(*) AS claims,
        round(100.0 * avg((ev = 'Supported')::int), 0) AS supported,
        round(100.0 * avg((ev = 'Some concerns')::int), 0) AS some_concerns,
@@ -64,7 +64,7 @@ SELECT a.element,
   FROM _ev a JOIN _ev b ON b.claim_id = a.claim_id AND b.element = a.element AND a.slot = 1 AND b.slot = 2
  GROUP BY a.element ORDER BY a.element;
 \echo
-\echo == V5. Agreement on everything else coded (percent agreement and Cohen's kappa) ==
+\echo '== V5. Agreement on everything else coded (percent agreement and Cohen''s kappa) =='
 CREATE TEMP VIEW _items AS
   SELECT 'Claim rating' AS item, a.claim_id, a.final_claim_rating::text AS x, b.final_claim_rating::text AS y FROM _cod a JOIN _cod b ON b.claim_id = a.claim_id AND a.slot = 1 AND b.slot = 2
   UNION ALL SELECT 'Implications rating', a.claim_id, a.final_implications_rating::text, b.final_implications_rating::text FROM _cod a JOIN _cod b ON b.claim_id = a.claim_id AND a.slot = 1 AND b.slot = 2
@@ -80,7 +80,7 @@ SELECT n.item, n.n::int AS claims, round(100 * n.po, 1) AS pct_agree,
        CASE WHEN pe.pe < 1 THEN round((n.po - pe.pe) / (1 - pe.pe), 2) END AS kappa,
        CASE WHEN pe.pe >= 1 THEN 'no variation: kappa undefined' ELSE '' END AS note
   FROM n JOIN pe USING (item) ORDER BY 1;
-\echo Claim type: each coder's reading against the type on the Claim record, which the rules use.
+\echo 'Claim type: each coder''s reading against the type on the Claim record, which the rules use.'
 SELECT count(*) AS codings, count(*) FILTER (WHERE k.coder_claim_type = cl.claim_type) AS same_as_record FROM _cod k JOIN tracker.claims cl USING (claim_id);
 \echo
 \echo == 4. Claim rating and Implications rating from each independent coding ==
@@ -104,7 +104,7 @@ SELECT a.claim_id, a.element, a.ev AS coder_1, b.ev AS coder_2, abs(a.lvl - b.lv
  WHERE a.ev <> b.ev ORDER BY a.claim_id, a.element;
 \echo
 \echo == V4. Agreement on each signalling question ==
-\echo Reading: favorable, unfavorable or neutral. AC1 is Gwet's. Prevalence and bias indices use Claims where both readings are favorable or unfavorable.
+\echo 'Reading: favorable, unfavorable or neutral. AC1 is Gwet''s. Prevalence and bias indices use Claims where both readings are favorable or unfavorable.'
 WITH r AS (
   SELECT k.claim_id, k.slot, a.question_code AS code, q.element, q.position, a.answer,
          CASE WHEN a.answer IN ('Y','PY') THEN 'f' WHEN tracker.is_unf(a.answer, q.ni_reading) THEN 'u' ELSE 'n' END AS rd
@@ -134,11 +134,11 @@ SELECT code, n::int AS claims, round(100 * po, 0) AS pct_agree,
 SELECT question_code, claims_split, CASE WHEN flag_for_rewording THEN 'REWORD?' ELSE '' END AS flag
   FROM tracker.question_splits WHERE protocol_version = :'pv' ORDER BY claims_split DESC, question_code;
 \echo
-\echo == V6. The algorithm against the coder's own evaluation; override rate; route to Not supported ==
+\echo '== V6. The algorithm against the coder''s own evaluation; override rate; route to Not supported =='
 \echo What made the algorithm propose Not supported:
 SELECT element, coalesce(route, '(coder override, no route)') AS route, count(*) AS codings
   FROM _ev WHERE ev = 'Not supported' GROUP BY 1, 2 ORDER BY 1, 2;
-\echo The algorithm against each coder's own evaluation, recorded before the algorithm's result was shown (kappa beside percent agreement).
+\echo 'The algorithm against each coder''s own evaluation, recorded before the algorithm''s result was shown (kappa beside percent agreement).'
 \echo     "critical" is the alternative rule: only a plain No on a critical question gives Not supported
 \echo     (C6; E1, E2, E6, E8a, E8b; R1, R2). Implications and Context have no critical questions yet.
 WITH x AS (
